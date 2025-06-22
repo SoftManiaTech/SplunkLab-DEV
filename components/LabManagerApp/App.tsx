@@ -200,8 +200,22 @@ function App(): JSX.Element {
 
               {usage && (
                 <div className="w-full text-sm mt-4">
-                  {/* Desktop View */}
-                  <div className="hidden sm:flex flex-wrap items-center gap-x-4 gap-y-2 bg-green-50 border border-green-200 text-gray-800 rounded-lg px-4 py-3">
+
+                  {/* Determine if quota is over */}
+                  {(usage.balance_hours <= 0 || usage.balance_days <= 0) && (
+                    <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md px-4 py-2 mb-3">
+                      ⚠️ <strong>Your purchased quota has finished.</strong> Your instance will be terminated soon.
+                    </div>
+                  )}
+
+                  {/* Color box: green if quota left, red if finished */}
+                  <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg px-4 py-3
+      ${(usage.balance_hours <= 0 || usage.balance_days <= 0)
+                      ? 'bg-red-50 border border-red-200 text-red-800'
+                      : 'bg-green-50 border border-green-200 text-gray-800'
+                    }
+      hidden sm:flex`
+                  }>
                     <span><strong>Quota Hours:</strong> {usage.quota_hours} hrs</span>
                     <span><strong>Used Hours:</strong> {usage.used_hours.toFixed(1)} hrs</span>
                     <span><strong>Balance Hours:</strong> {usage.balance_hours.toFixed(1)} hrs</span>
@@ -212,15 +226,18 @@ function App(): JSX.Element {
                   </div>
 
                   {/* Mobile View */}
-                  <div className="sm:hidden flex flex-col gap-3 bg-green-50 border border-green-200 text-gray-800 rounded-lg px-4 py-3">
-                    {/* Days block first */}
+                  <div className={`sm:hidden flex flex-col gap-3 rounded-lg px-4 py-3
+      ${(usage.balance_hours <= 0 || usage.balance_days <= 0)
+                      ? 'bg-red-50 border border-red-200 text-red-800'
+                      : 'bg-green-50 border border-green-200 text-gray-800'
+                    }`
+                  }>
                     <div className="flex flex-col gap-1">
                       <p><strong>Quota Days:</strong> {usage.quota_days} days</p>
                       <p><strong>Used Days:</strong> {usage.used_days.toFixed(1)} days</p>
                       <p><strong>Balance Days:</strong> {usage.balance_days.toFixed(1)} days</p>
                     </div>
-                    {/* Then Hours block */}
-                    <div className="flex flex-col gap-1 pt-2 border-t border-green-200">
+                    <div className="flex flex-col gap-1 pt-2 border-t border-current">
                       <p><strong>Quota Hours:</strong> {usage.quota_hours} hrs</p>
                       <p><strong>Used Hours:</strong> {usage.used_hours.toFixed(1)} hrs</p>
                       <p><strong>Balance Hours:</strong> {usage.balance_hours.toFixed(1)} hrs</p>
