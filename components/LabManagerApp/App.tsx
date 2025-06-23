@@ -261,14 +261,14 @@ function App(): JSX.Element {
           </>
         ) : (
           <div className="mt-20 max-w-md mx-auto bg-white border border-gray-200 shadow-lg rounded-2xl p-8 text-center">
-            <h3 className="text-2xl font-semibold text-gray-800 mb-3">👋 Welcome to Softmania Labs</h3>
+            <h3 className="text-2xl font-semibold text-gray-800 mb-3">👋 Welcome to SoftMania Labs</h3>
             <p className="text-yellow-500 font-semibold mb-2">It looks like you don’t have a lab assigned yet.</p>
             <p className="text-gray-500">Choose a plan to get started with your personalized lab setup.</p>
 
             <div className="mt-6 flex flex-col gap-3">
               <button
                 onClick={() => router.push('/')}
-                className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium py-2 rounded-xl shadow-sm"
+                className="w-full bg-green-600 hover:bg-green-700 transition-colors text-white font-medium py-2 rounded-xl shadow-sm"
               >
                 Choose Lab Plan
               </button>

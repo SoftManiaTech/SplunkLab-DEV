@@ -57,7 +57,7 @@ const environments: EnvironmentOption[] = [
       "BOTSv3 Security Dataset (Real-world logs for threat hunting). (optional)",
       "Supporting Add-ons for seamless data ingestion. (optional)",
     ],
-    info: ["OS: Red Hat-9", "Splunk Enterprise Version: 9.4.1"],
+    info: ["(OS: Red Hat-9) (RAM: 4 GB) (vCPUs: 2)", "Splunk Enterprise Version: 9.4.1",],
     components: ["Splunk Enterprise"],
     pricing: [
       { amount: 100, hours: 10, paymentLink: "https://pages.razorpay.com/Splunk-SE-100" },
@@ -67,8 +67,8 @@ const environments: EnvironmentOption[] = [
       { amount: 500, hours: 56, paymentLink: "https://pages.razorpay.com/Splunk-SE-500" },
     ],
     redirectUrl: "https://softmania.com/splunk-standalone-lab",
-    color: "text-blue-600",
-    bgColor: "bg-blue-50 dark:bg-blue-950/50",
+    color: "text-green-600",
+    bgColor: "bg-green-50 dark:bg-green-950/50",
     demoVideoId: "dQw4w9WgXcQ",
     demoTitle: "Standalone Server Complete Walkthrough",
     demoDuration: "8:45"
@@ -84,7 +84,7 @@ const environments: EnvironmentOption[] = [
       "Distributed search capabilities",
       "BOTSv3 Security Dataset (Real-world logs for threat hunting). (optional)",
     ],
-    info: ["OS: Red Hat-9", "Splunk Enterprise Version: 9.4.1"],
+    info: ["(OS: Red Hat-9) (RAM: 4 GB) (vCPUs: 2)", "Splunk Enterprise Version: 9.4.1",],
     components: ["Search Head", "Indexer", "Heavy Forwarder", "Universal Forwarder"],
     pricing: [
       { amount: 200, hours: 4, paymentLink: "https://pages.razorpay.com/Splunk-DNC-200" },
@@ -111,7 +111,7 @@ const environments: EnvironmentOption[] = [
       "Indexer cluster (3 nodes)",
       "Management server features (Deployer, License manager, Deployment server, Monitoring Console)",
     ],
-    info: ["OS: Red Hat-9", "Splunk Enterprise Version: 9.4.1"],
+    info: ["(OS: Red Hat-9) (RAM: 4 GB) (vCPUs: 2)", "Splunk Enterprise Version: 9.4.1",],
     components: ["SH Cluster", "IDX Cluster", "Cluster Master", "HF", "Management server"],
     pricing: [
       { amount: 1000, hours: 11, paymentLink: "https://pages.razorpay.com/Splunk-DC-1000" },
@@ -202,13 +202,13 @@ export default function LabEnvironments() {
       <header className="border-b border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <Link href="https://pages.razorpay.com/Splunk-DC-1" passHref>
+            <Link href="/" passHref>
               <SoftmaniaLogo size="md" />
             </Link>
             <Button
               variant="outline"
               size="sm"
-              className="m-[4px] hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-105 shadow-sm"
+              className="m-[3px] hover:bg-green-50 border-green-500 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-105 shadow-sm"
               onClick={() => router.push("/lab")}
             >
               <UserRoundCheck className="mr-2" />
@@ -229,7 +229,7 @@ export default function LabEnvironments() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-8 sm:py-12 lg:py-16">
+      <section className="py-8 sm:py-10 lg:py-10">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-4">
@@ -298,7 +298,7 @@ export default function LabEnvironments() {
                   {env.components && (
                     <div>
                       <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <Server className="w-4 h-4 text-blue-600" />
+                        <Server className="w-4 h-4 text-green-600" />
                         Components
                       </h3>
                       <div className="flex flex-wrap gap-2">
@@ -341,16 +341,16 @@ export default function LabEnvironments() {
                       {env.pricing.map((option, index) => (
                         <div
                           key={index}
-                          onClick={() => {
-                            window.location.href = option.paymentLink;
-                          }}
-                          className={`relative p-3 rounded-lg border text-center cursor-pointer transition-all duration-300 hover:scale-105 ${selectedPricing[env.id]?.amount === option.amount
-                            ? "border-green-500 bg-green-50 dark:bg-green-950/50 ring-1 ring-green-200 dark:ring-green-800 shadow-md"
-                            : option.popular
-                              ? "border-blue-500 bg-blue-50 dark:bg-blue-950/50 shadow-sm"
-                              : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm"
+                          onClick={() => window.open(option.paymentLink, '_blank')}
+                          className={`relative p-4 rounded-2xl border text-center cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02]
+      ${selectedPricing[env.id]?.amount === option.amount
+                              ? "border-green-500 bg-green-50 dark:bg-green-950/50 ring-1 ring-green-200 dark:ring-green-800 shadow-md"
+                              : option.popular
+                                ? "border-green-500 bg-green-50 dark:bg-green-950/50 shadow-sm"
+                                : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
                             }`}
                         >
+                          {/* Selected Badge */}
                           {selectedPricing[env.id]?.amount === option.amount && (
                             <div className="absolute -top-1 left-1/2 transform -translate-x-1/2">
                               <Badge className="bg-green-600 text-white text-xs animate-pulse">
@@ -359,28 +359,48 @@ export default function LabEnvironments() {
                               </Badge>
                             </div>
                           )}
+
+                          {/* Popular Badge */}
                           {option.popular && selectedPricing[env.id]?.amount !== option.amount && (
                             <div className="absolute -top-1 left-1/2 transform -translate-x-1/2">
-                              <Badge className="bg-blue-600 text-white text-xs animate-bounce">
+                              <Badge className="bg-green-600 text-white text-xs animate-bounce">
                                 <Star className="w-2 h-2 mr-1" />
                                 Popular
                               </Badge>
                             </div>
                           )}
 
+                          {/* External Icon */}
+                          <ArrowUpRightFromSquare className="absolute top-2 right-2 w-4 h-4 text-green-600 dark:text-gray-500" />
 
-                          {/* External link icon */}
-                          <ArrowUpRightFromSquare className="absolute top-2 right-2 w-4 h-4 text-gray-300 dark:text-gray-500" />
-
+                          {/* Amount */}
                           <div className="text-lg font-bold text-gray-900 dark:text-white">₹{option.amount}</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">
-                            {option.hours} {option.hours === 1 ? "hour" : "hours"}
+
+                          {/* Hours */}
+                          <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                            {option.hours} {option.hours === 1 ? "hour (2h/day)" : "hours (2h/day)"}
                           </div>
-                          <div className="text-xs text-green-600 font-medium">
-                            ₹{Math.round(option.amount / option.hours)}/Hour
+
+                          {/* Days Expiry – dynamically calculated or hardcoded */}
+                          <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                            Approx. {Math.ceil(option.hours / 2)} days validity
                           </div>
+
+                          {/* Open Link Button
+                          <div className="mt-3">
+                            <button
+                              className="text-xs px-2 py-1 rounded-md bg-green-600 text-white hover:bg-green-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(option.paymentLink, '_blank');
+                              }}
+                            >
+                              Pay
+                            </button>
+                          </div> */}
                         </div>
                       ))}
+
                     </div>
                   </div>
                 </CardContent>
@@ -440,7 +460,7 @@ export default function LabEnvironments() {
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mt-6">
               <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-                <Headphones className="w-5 h-5 text-blue-600" />
+                <Headphones className="w-5 h-5 text-green-600" />
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">Expert Support Available</p>
                   {/* <p className="text-xs">Our Splunk certified team is ready to help you choose the right environment</p> */}
@@ -462,61 +482,143 @@ export default function LabEnvironments() {
           <div className="max-w-3xl mx-auto dark:text-gray-800 tracking-tight">
             <Accordion type="single" collapsible className="w-full">
 
+              {/* QUESTION 1 */}
+              <AccordionItem value="can-onboard-own-data">
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  Can I onboard my own data source?
+                </AccordionTrigger>
+                <AccordionContent>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>You have full control over the rented servers.</li>
+                    <li>You can onboard any of your own data sources.</li>
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* QUESTION 2 */}
+              <AccordionItem value="live-data-sources">
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  Does this environment come with live data sources?
+                </AccordionTrigger>
+                <AccordionContent>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>Not yet, this feature is planned for future versions.</li>
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* QUESTION 3 */}
+              <AccordionItem value="refund-policy">
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  Will I get a refund?
+                </AccordionTrigger>
+                <AccordionContent>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>No, refunds are not provided.</li>
+                    <li>Server provisioning starts immediately after purchase.</li>
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* QUESTION 4 */}
+              <AccordionItem value="has-es-itsi">
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  Does this environment include Splunk ES or ITSI?
+                </AccordionTrigger>
+                <AccordionContent>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>We provide only the free version of Splunk Enterprise.</li>
+                    <li>You can install ES or ITSI using your own license (BYOL).</li>
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* QUESTION 5 */}
               <AccordionItem value="what-is-this">
-                <AccordionTrigger>What does this lab service provide?</AccordionTrigger>
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  What does this lab service provide?
+                </AccordionTrigger>
                 <AccordionContent>
-                  <p className="text-gray-600">
-                    We offer hourly-based Splunk lab environments with pre-loaded demo datasets (like BOTSv3), Splunk add-ons, and ready-to-use setups such as standalone, non-clustered distributed, and clustered environments.
-                  </p>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>Hourly-based Splunk lab environments.</li>
+                    <li>Preloaded datasets like BOTSv3.</li>
+                    <li>Essential Splunk add-ons.</li>
+                    <li>Standalone, distributed, or clustered setups.</li>
+                  </ul>
                 </AccordionContent>
               </AccordionItem>
 
+              {/* QUESTION 6 */}
               <AccordionItem value="who-is-this-for">
-                <AccordionTrigger>Who is this Splunk lab for?</AccordionTrigger>
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  Who is this Splunk lab for?
+                </AccordionTrigger>
                 <AccordionContent>
-                  <p className="text-gray-600">
-                    This lab is perfect for beginners, learners preparing for certifications, or professionals wanting hands-on experience in a real-time Splunk environment without having to set it up from scratch.
-                  </p>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>Beginners learning Splunk.</li>
+                    <li>Certification exam preparation.</li>
+                    <li>Professionals needing real-world practice.</li>
+                  </ul>
                 </AccordionContent>
               </AccordionItem>
 
+              {/* QUESTION 7 */}
               <AccordionItem value="support-available">
-                <AccordionTrigger>Is 24/7 support included?</AccordionTrigger>
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  Is 24/7 support included?
+                </AccordionTrigger>
                 <AccordionContent>
-                  <p className="text-gray-600">
-                    No, we do not provide 24/7 support. However, free basic course guidance is available to help you get started with the lab environment.
-                  </p>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>No, 24/7 support is not included.</li>
+                    <li>Free basic course guidance is available.</li>
+                  </ul>
                 </AccordionContent>
               </AccordionItem>
 
+              {/* QUESTION 8 */}
               <AccordionItem value="demo-dataset">
-                <AccordionTrigger>What demo data is included?</AccordionTrigger>
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  What demo data is included?
+                </AccordionTrigger>
                 <AccordionContent>
-                  <p className="text-gray-600">
-                    We include popular datasets like <strong>BOTSv3</strong> to help you simulate real-world security scenarios inside your lab.
-                  </p>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>BOTSv3 dataset for threat simulation.</li>
+                    <li>Realistic logs for hands-on practice.</li>
+                  </ul>
                 </AccordionContent>
               </AccordionItem>
 
+              {/* QUESTION 9 */}
               <AccordionItem value="env-types">
-                <AccordionTrigger>Can I choose different types of environments?</AccordionTrigger>
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  Can I choose different types of environments?
+                </AccordionTrigger>
                 <AccordionContent>
-                  <p className="text-gray-600">
-                    Yes. You can request standalone, non-clustered distributed, or fully clustered Splunk environments depending on your learning goals.
-                  </p>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>Yes, choose from:</li>
+                    <li>Standalone</li>
+                    <li>Non-clustered distributed</li>
+                    <li>Clustered Splunk setups</li>
+                  </ul>
                 </AccordionContent>
               </AccordionItem>
 
+              {/* QUESTION 10 */}
               <AccordionItem value="cert-prep">
-                <AccordionTrigger>Is this lab suitable for certification practice?</AccordionTrigger>
+                <AccordionTrigger className="text-gray-800 hover:text-green-600 transition-colors duration-200 font-medium text-base">
+                  Is this lab suitable for certification practice?
+                </AccordionTrigger>
                 <AccordionContent>
-                  <p className="text-gray-600">
-                    Absolutely. This lab setup is ideal for certification practice, lab exercises, and real-time scenario testing with Splunk.
-                  </p>
+                  <ul className="text-sm text-gray-600 pl-4 space-y-1">
+                    <li>Yes, it’s perfect for practicing lab exercises and exam preparation.</li>
+                    <li>Ideal for testing real-world Splunk scenarios.</li>
+                  </ul>
                 </AccordionContent>
               </AccordionItem>
 
             </Accordion>
+
+
           </div>
         </div>
       </section>

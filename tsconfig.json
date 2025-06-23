@@ -5,6 +5,13 @@
       "dom.iterable",
       "esnext"
     ],
+    "typeRoots": [
+      "./types",
+      "./node_modules/@types"
+    ],
+    "types": [
+      "locomotive-scroll"
+    ], // 👈 Add this line
     "allowJs": true,
     "target": "ES6",
     "skipLibCheck": true,
@@ -33,8 +40,10 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
-, ".next/types/app/thank-you/page.tsx"  ],
+    ".next/types/**/*.ts",
+    ".next/types/app/thank-you/page.tsx",
+    "types/**/*.d.ts" // 👈 Add this to ensure the folder is included
+  ],
   "exclude": [
     "node_modules"
   ]
