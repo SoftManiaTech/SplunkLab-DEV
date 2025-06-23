@@ -53,12 +53,12 @@ export default function RefundPage() {
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900 mb-4">4. Contact</h2>
                 <p className="text-slate-700 leading-relaxed">For support or issues, please reach out to:</p>
-                <p className="text-slate-700 leading-relaxed font-medium">support@softmania.in | +91-XXXXXXXXXX</p>
+                <p className="text-slate-700 leading-relaxed font-medium">labsupport@softmania.in | +91-8317349618</p>
               </div>
 
               <div className="border-t pt-8 mt-8 text-center">
                 <p className="text-slate-600">
-                  Soft Mania | support@softmania.in | +91-XXXXXXXXXX | www.yourwebsite.com
+                   Soft Mania | labsupport@softmania.in | +91-8317349618 | www.softmania.in
                 </p>
               </div>
             </CardContent>

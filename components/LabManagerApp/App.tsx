@@ -196,10 +196,23 @@ function App(): JSX.Element {
         ) : hasLab ? (
           <>
             <div className="bg-[#f4f6fa] shadow-sm rounded-lg p-5 mb-6">
-              <h2 className="text-lg text-[#2c3e50] font-bold">
-                Welcome back, <span className="text-[#007acc]">{getUsernameFromEmail(email)}</span>
-              </h2>
-              <p className="text-sm text-[#34495e]">This is your personal <strong>Lab server Manager Dashboard</strong> 🚀</p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <h2 className="text-lg text-[#2c3e50] font-bold">
+                    Welcome back, <span className="text-[#007acc]">{getUsernameFromEmail(email)}</span>
+                  </h2>
+                  <p className="text-sm text-[#34495e]">
+                    This is your personal <strong>Lab server Manager Dashboard</strong> 🚀
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  className="mt-2 sm:mt-0 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                >
+                  Logout
+                </button>
+              </div>
 
               {usage && (
                 <div className="w-full text-sm mt-4">
@@ -218,9 +231,8 @@ function App(): JSX.Element {
                     <span><strong>Used Hours:</strong> {usage.used_hours.toFixed(1)} hrs</span>
                     <span><strong>Balance Hours:</strong> {usage.balance_hours.toFixed(1)} hrs</span>
                     <span className="mx-2 text-gray-400">|</span>
-                    <span><strong>Quota Days:</strong> {usage.quota_days} days</span>
-                    <span><strong>Used Days:</strong> {usage.used_days.toFixed(1)} days</span>
-                    <span><strong>Balance Days:</strong> {usage.balance_days.toFixed(1)} days</span>
+                    <span><strong>Validity:</strong> {usage.quota_days} days</span>
+
                   </div>
 
                   {/* Mobile View */}
@@ -249,15 +261,6 @@ function App(): JSX.Element {
               setInstances={setInstances}
               loading={loading}
             />
-
-            <div className="text-right mt-4">
-              <button
-                onClick={handleLogout}
-                className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-              >
-                Logout
-              </button>
-            </div>
           </>
         ) : (
           <div className="mt-20 max-w-md mx-auto bg-white border border-gray-200 shadow-lg rounded-2xl p-8 text-center">

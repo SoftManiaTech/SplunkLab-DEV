@@ -261,10 +261,10 @@ const handleProceedToPayment = () => {
         window.open("https://wa.me/918317349618?text=Hi, I'm interested in Splunk Lab Environments", "_blank")
         break
       case "email":
-        window.open("mailto:info@softmania.in?subject=Splunk Lab Environment Inquiry", "_self")
+        window.open("mailto:labsupport@softmania.in?subject=Splunk Lab Environment Inquiry", "_self")
         break
       case "schedule":
-        window.open("https://bookings.softmania.in/#/services", "_blank")
+        window.open("https://bookings.softmania.in/#/211453000001708008", "_blank")
         break
     }
     setShowContactModal(false)
@@ -303,7 +303,7 @@ const handleProceedToPayment = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="hover:bg-blue-50 border-blue-500 transition-all duration-300 hover:scale-105 shadow-sm"
+                    className="hover:bg-red-50 border-red-500 transition-all duration-300 hover:scale-105 shadow-sm"
                   >
                     <Info className="w-4 h-4 mr-2" />
                     Disclaimer
@@ -314,7 +314,7 @@ const handleProceedToPayment = () => {
                     <DialogTitle className="text-2xl font-medium text-gray-900 mb-4">Important Disclaimer</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
-                    <div className="bg-blue-50 border border-green-600 rounded-lg p-6">
+                    <div className="bg-red-50 border border-red-600 rounded-lg p-6">
                       <p className="text-gray-700 leading-relaxed text-base">
                         This lab provides infrastructure with pre-installed Splunk under its Free or Trial license. We
                         do not sell or resell Splunk software. All usage is subject to Splunk's official license terms.
@@ -324,7 +324,7 @@ const handleProceedToPayment = () => {
                     <div className="flex justify-end pt-4">
                       <Button
                         onClick={() => setShowDisclaimerModal(false)}
-                        className="bg-green-700 hover:bg-green-800 text-white"
+                        className="bg-red-700 hover:bg-red-800 text-white"
                       >
                         I Understand
                       </Button>
@@ -438,7 +438,7 @@ const handleProceedToPayment = () => {
             <p className="text-lg text-gray-600 dark:text-gray-400 mb-3">
               Choose the perfect environment for your Splunk learning journey
             </p>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-[8px] italic">
+            <p className="text-[10px] text-red-400 dark:text-gray-500 mt-[8px] italic">
               (For practice and learning purposes only — not for production use)
             </p>
           </div>
@@ -665,7 +665,7 @@ const handleProceedToPayment = () => {
                     <p className="leading-relaxed text-xs sm:text-sm">
                       Do you have a Splunk Developer License? If not, you can apply for one{" "}
                       <a
-                        href="https://www.splunk.com/en_us/form/developer-license.html"
+                        href="https://dev.splunk.com/enterprise/dev_license"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:underline font-medium"
@@ -1056,8 +1056,8 @@ const handleProceedToPayment = () => {
 
             {/* Bottom Section: Professional Disclaimer */}
             <div className="max-w-4xl mx-auto text-center">
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <div className="bg-red-50 dark:bg-red-800 rounded-lg p-4 sm:p-6 border border-red-400 dark:border-gray-700">
+                <h4 className="text-sm font-semibold text-red-700 dark:text-white mb-2">
                   Independent Service Disclaimer
                 </h4>
                 <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
