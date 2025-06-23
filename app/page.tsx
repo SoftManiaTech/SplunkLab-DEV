@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { SoftmaniaLogo } from "@/components/softmania-logo"
 import Link from 'next/link';
 import Salesiq from "@/components/salesiq"
@@ -25,6 +25,7 @@ import {
   UserRoundCheck,
   Check,
   ArrowUpRightFromSquare,
+  Info,
 } from "lucide-react"
 
 interface EnvironmentOption {
@@ -135,6 +136,7 @@ export default function LabEnvironments() {
   const router = useRouter()
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const popupRef = useRef<HTMLDivElement | null>(null);
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -198,24 +200,63 @@ export default function LabEnvironments() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
-      {/* Header */}
-      <header className="border-b border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm sticky top-0 z-40">
+       {/* Header */}
+      <header className="border-b border-gray-100 bg-white/95 backdrop-blur-sm sticky top-0 z-40 relative">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" passHref>
+          <div className="flex items-center justify-between w-full">
+           <Link href="/" passHref>
               <SoftmaniaLogo size="md" />
             </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              className="m-[3px] hover:bg-green-50 border-green-500 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-105 shadow-sm"
-              onClick={() => router.push("/lab")}
-            >
-              <UserRoundCheck className="mr-2" />
-              MyLab
-            </Button>
+            <div className="absolute left-1/2 -translate-x-1/2 z-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="hover:bg-green-50 border-green-500 transition-all duration-300 hover:scale-105 shadow-sm"
+                onClick={() => router.push("/lab")}
+              >
+                <UserRoundCheck className="w-4 h-4 mr-2" />
+                <span>{"MyLab"}</span>
+              </Button>
+            </div>
 
-            <Button
+            {/* Right: Disclaimer and Contact Sales Buttons */}
+            <div className="flex items-center space-x-3 z-10">
+              <Dialog open={showDisclaimerModal} onOpenChange={setShowDisclaimerModal}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="hover:bg-blue-50 border-blue-500 transition-all duration-300 hover:scale-105 shadow-sm"
+                  >
+                    <Info className="w-4 h-4 mr-2" />
+                    Disclaimer
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl bg-white">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-medium text-gray-900 mb-4">Important Disclaimer</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                      <p className="text-gray-700 leading-relaxed text-base">
+                        This lab provides infrastructure with pre-installed Splunk under its Free or Trial license. We
+                        do not sell or resell Splunk software. All usage is subject to Splunk's official license terms.
+                        This service is intended for educational and personal learning only.
+                      </p>
+                    </div>
+                    <div className="flex justify-end pt-4">
+                      <Button
+                        onClick={() => setShowDisclaimerModal(false)}
+                        className="bg-gray-900 hover:bg-gray-800 text-white"
+                      >
+                        I Understand
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Button
               variant="outline"
               size="sm"
               onClick={() => setShowContactModal(true)}
@@ -224,9 +265,11 @@ export default function LabEnvironments() {
               <Phone className="w-4 h-4 mr-2" />
               Contact Sales
             </Button>
+            </div>
           </div>
         </div>
       </header>
+
 
       {/* Hero Section */}
       <section className="py-8 sm:py-10 lg:py-10">
@@ -235,12 +278,16 @@ export default function LabEnvironments() {
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-4">
               Splunk Lab Environments
             </h1>
-            <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
+            <p className="text-lg text-gray-600 dark:text-gray-400 mb-3">
               Choose the perfect environment for your Splunk learning journey
+            </p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-[8px] italic">
+              (For practice and learning purposes only — not for production use)
             </p>
           </div>
         </div>
       </section>
+
 
       {/* Environment Cards - All 3 in Same Style */}
       <section className="pb-12 sm:pb-16 lg:pb-20">
@@ -636,13 +683,13 @@ export default function LabEnvironments() {
             {/* Right Side: Links */}
             <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-gray-400">
               <div className="mt-2 flex justify-center space-x-4">
-                <Link href="https://splunk.softmania.in/#/privacy-policy" target="_blank" className="hover:text-black transition-colors">
+                <Link href="/privacy" passHref>
                   Privacy Policy
                 </Link>
-                <Link href="https://splunk.softmania.in/#/terms-and-conditions" target="_blank" className="hover:text-black transition-colors">
+                <Link href="/terms" passHref>
                   Terms & Conditions
                 </Link>
-                <Link href="https://splunk.softmania.in/#/refund-policy" target="_blank" className="hover:text-black transition-colors">
+                <Link href="/refund" passHref>
                   Refund Policy
                 </Link>
               </div>
