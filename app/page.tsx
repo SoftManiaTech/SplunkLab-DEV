@@ -310,7 +310,7 @@ export default function LabEnvironments() {
                     <DialogTitle className="text-2xl font-medium text-gray-900 mb-4">Important Disclaimer</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                       <p className="text-red-700 leading-relaxed text-base">
                         This lab provides infrastructure with pre-installed Splunk under its Free or Trial license. We
                         do not sell or resell Splunk software. All usage is subject to Splunk's official license terms.
