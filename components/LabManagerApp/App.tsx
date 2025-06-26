@@ -8,6 +8,7 @@ import EC2Table from './components/EC2Table';
 import { SoftmaniaLogo } from "@/components/softmania-logo";
 import Link from 'next/link';
 import * as CryptoJS from 'crypto-js';
+import { RefreshCcw } from 'lucide-react';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_CLIENT_ID as string;
 const API_URL = process.env.NEXT_PUBLIC_API_URL as string;
@@ -30,7 +31,11 @@ function App(): JSX.Element {
     quota_days: number;
     used_days: number;
     balance_days: number;
+    plan_start_date?: string;
+    plan_end_date?: string;
   } | null>(null);
+
+  const [refreshing, setRefreshing] = useState(false);
 
   const encrypt = (data: string): string => {
     return CryptoJS.AES.encrypt(data, SECRET_KEY).toString();
@@ -69,6 +74,7 @@ function App(): JSX.Element {
 
   const fetchUsageSummary = async (userEmail: string) => {
     try {
+      setRefreshing(true);
       const res = await fetch(`${API_URL}/usage-summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -85,10 +91,14 @@ function App(): JSX.Element {
         balance_hours: data.BalanceHours || 0,
         quota_days: data.QuotaExpiryDays || 0,
         used_days: data.ConsumedDays || 0,
-        balance_days: data.BalanceDays || 0
+        balance_days: data.BalanceDays || 0,
+        plan_start_date: data.PlanStartDate || '',
+        plan_end_date: data.PlanEndDate || ''
       });
     } catch (err) {
       console.error("Error fetching usage summary:", err);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -232,7 +242,19 @@ function App(): JSX.Element {
                     <span><strong>Balance Hours:</strong> {usage.balance_hours.toFixed(1)} hrs</span>
                     <span className="mx-2 text-gray-400">|</span>
                     <span><strong>Validity:</strong> {usage.quota_days} days</span>
-
+                    <span><strong>Plan Start Date:</strong> {usage.plan_start_date || 'N/A'}</span>
+                    <span className="flex items-center gap-2">
+                      <strong>Plan End Date:</strong> {usage.plan_end_date || 'N/A'}
+                      <span className="text-red-500">(will be terminated on this date.)</span>
+                      <button
+                        onClick={() => fetchUsageSummary(email)}
+                        disabled={refreshing}
+                        className={`p-2 rounded-full ${refreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-600 text-gray-700'} text-white`}
+                        title="Refresh"
+                      >
+                        <RefreshCcw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      </button>
+                    </span>
                   </div>
 
                   {/* Mobile View */}
@@ -244,6 +266,18 @@ function App(): JSX.Element {
                       <p><strong>Quota Days:</strong> {usage.quota_days} days</p>
                       <p><strong>Used Days:</strong> {usage.used_days.toFixed(1)} days</p>
                       <p><strong>Balance Days:</strong> {usage.balance_days.toFixed(1)} days</p>
+                      <p><strong>Plan Start Date:</strong> {usage.plan_start_date || 'N/A'}</p>
+                      <div className="flex items-center gap-2">
+                        <p><strong>Plan End Date:</strong> {usage.plan_end_date || 'N/A'} <span className="text-gray-500">(will be terminated on this date.)</span></p>
+                        <button
+                          onClick={() => fetchUsageSummary(email)}
+                          disabled={refreshing}
+                          className={`p-2 rounded-full ${refreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'} text-white`}
+                          title="Refresh"
+                        >
+                          <RefreshCcw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
                     </div>
                     <div className="flex flex-col gap-1 pt-2 border-t border-current">
                       <p><strong>Quota Hours:</strong> {usage.quota_hours} hrs</p>
@@ -251,7 +285,7 @@ function App(): JSX.Element {
                       <p><strong>Balance Hours:</strong> {usage.balance_hours.toFixed(1)} hrs</p>
                     </div>
                   </div>
-                  {/* Add this line below usage summary */}
+
                   <p className="mt-3 text-sm text-gray-600">
                     If you are facing any issues accessing your lab server, please reach out to <a href="mailto:labsupport@softmania.in" className="text-blue-600 underline">labsupport@softmania.in</a>.
                   </p>
@@ -265,8 +299,6 @@ function App(): JSX.Element {
               setInstances={setInstances}
               loading={loading}
             />
-
-
           </>
         ) : (
           <div className="mt-20 max-w-md mx-auto bg-white border border-gray-200 shadow-lg rounded-2xl p-8 text-center">
@@ -290,7 +322,6 @@ function App(): JSX.Element {
               </button>
             </div>
           </div>
-
         )}
       </div>
 
