@@ -57,6 +57,12 @@ function App(): JSX.Element {
     return namePart.charAt(0).toUpperCase() + namePart.slice(1);
   };
 
+  const formatFloatHours = (hours: number): string => {
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  };
+
   const fetchInstances = async (userEmail: string) => {
     try {
       setLoading(true);
@@ -215,7 +221,6 @@ function App(): JSX.Element {
                     This is your personal <strong>Lab server Manager Dashboard</strong> 🚀
                   </p>
                 </div>
-
                 <button
                   onClick={handleLogout}
                   className="mt-2 sm:mt-0 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
@@ -237,9 +242,9 @@ function App(): JSX.Element {
                     ? 'bg-red-50 border border-red-200 text-red-800'
                     : 'bg-green-50 border border-green-200 text-gray-800'
                     }`}>
-                    <span><strong>Quota Hours:</strong> {usage.quota_hours} hrs</span>
-                    <span><strong>Used Hours:</strong> {usage.used_hours.toFixed(1)} hrs</span>
-                    <span><strong>Balance Hours:</strong> {usage.balance_hours.toFixed(1)} hrs</span>
+                    <span><strong>Quota Hours:</strong> {formatFloatHours(usage.quota_hours)} hrs</span>
+                    <span><strong>Used Hours:</strong> {formatFloatHours(usage.used_hours)} hrs</span>
+                    <span><strong>Balance Hours:</strong> {formatFloatHours(usage.balance_hours)} hrs</span>
                     <span className="mx-2 text-gray-400">|</span>
                     <span><strong>Validity:</strong> {usage.quota_days} days</span>
                     <span><strong>Plan Start Date:</strong> {usage.plan_start_date || 'N/A'}</span>
@@ -280,9 +285,9 @@ function App(): JSX.Element {
                       </div>
                     </div>
                     <div className="flex flex-col gap-1 pt-2 border-t border-current">
-                      <p><strong>Quota Hours:</strong> {usage.quota_hours} hrs</p>
-                      <p><strong>Used Hours:</strong> {usage.used_hours.toFixed(1)} hrs</p>
-                      <p><strong>Balance Hours:</strong> {usage.balance_hours.toFixed(1)} hrs</p>
+                      <p><strong>Quota Hours:</strong> {formatFloatHours(usage.quota_hours)} hrs</p>
+                      <p><strong>Used Hours:</strong> {formatFloatHours(usage.used_hours)} hrs</p>
+                      <p><strong>Balance Hours:</strong> {formatFloatHours(usage.balance_hours)} hrs</p>
                     </div>
                   </div>
 
