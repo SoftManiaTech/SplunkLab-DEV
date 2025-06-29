@@ -675,7 +675,7 @@ export default function LabEnvironments() {
                     <p className="leading-relaxed text-xs sm:text-sm">
                       Do you have a Splunk Developer License? If not, you can apply for one{" "}
                       <a
-                        href="https://www.splunk.com/en_us/form/developer-license.html"
+                        href="https://dev.splunk.com/enterprise/dev_license"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:underline font-medium"
