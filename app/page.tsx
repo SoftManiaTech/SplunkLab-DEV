@@ -309,3 +309,4 @@ export default function LabEnvironments() {
       <Salesiq />
     </div>
   )
+}
