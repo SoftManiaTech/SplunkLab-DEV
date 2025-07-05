@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
 import { LabHero } from "@/components/lab-hero"
 import { LabPricingModels, type EnvironmentOption } from "@/components/lab-pricing-models"
-import { event } from "@/lib/gtag";
+import { event } from "@/lib/gtag"
 
 interface SelectedPackageDetails {
   amount: number
@@ -30,16 +30,12 @@ export default function LabEnvironments() {
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const popupRef = useRef<HTMLDivElement | null>(null)
 
-  // State for managing expanded sections
   const [expandedFeatures, setExpandedFeatures] = useState<Record<string, boolean>>({})
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({})
-
-  // State for confirmation modal
   const [showConfirmationModal, setShowConfirmationModal] = useState(false)
   const [selectedPackageDetails, setSelectedPackageDetails] = useState<SelectedPackageDetails | null>(null)
   const [policyConfirmed, setPolicyConfirmed] = useState(false)
 
-  // Toggle functions for expanding/collapsing sections
   const toggleFeatures = (envId: string) => {
     setExpandedFeatures((prev) => ({
       ...prev,
@@ -54,7 +50,7 @@ export default function LabEnvironments() {
     }))
   }
 
-  // Handle package selection to open confirmation modal
+  // 🔹 Track package selection
   const handlePackageSelect = (env: EnvironmentOption, option: (typeof env.pricing)[0]) => {
     setSelectedPackageDetails({
       amount: option.amount,
@@ -63,7 +59,18 @@ export default function LabEnvironments() {
       components: env.components,
       envTitle: env.title,
     })
-    setPolicyConfirmed(false) // Reset checkboxes
+
+    event({
+      action: "select_package",
+      params: {
+        package_name: env.title,
+        amount: option.amount,
+        hours: option.hours,
+        page: "LabEnvironments",
+      },
+    })
+
+    setPolicyConfirmed(false)
     setShowConfirmationModal(true)
   }
 
@@ -74,7 +81,7 @@ export default function LabEnvironments() {
     }
   }
 
-  // Prevent body scroll when modal is open
+  // Prevent body scroll
   useEffect(() => {
     if (showConfirmationModal || showContactModal) {
       document.body.style.overflow = "hidden"
@@ -87,11 +94,20 @@ export default function LabEnvironments() {
     }
   }, [showConfirmationModal, showContactModal])
 
+  // 🔹 Track payment success
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get("payment") === "success") {
       setShowSuccessPopup(true)
-      // Remove the query param from URL after showing
+
+      event({
+        action: "payment_success",
+        params: {
+          source: "LabEnvironments",
+          timestamp: new Date().toISOString(),
+        },
+      })
+
       const url = new URL(window.location.href)
       url.searchParams.delete("payment")
       window.history.replaceState({}, document.title, url.pathname)
@@ -115,10 +131,10 @@ export default function LabEnvironments() {
   }, [showSuccessPopup])
 
   useEffect(() => {
-    const threshold = 160 // DevTools usually shrink the window height
+    const threshold = 160
     const checkDevTools = () => {
       if (window.outerHeight - window.innerHeight > threshold) {
-        window.location.href = "https://splunklab.softmania.com/blocked" // or show warning page
+        window.location.href = "https://splunklab.softmania.com/blocked"
       }
     }
 
@@ -128,22 +144,13 @@ export default function LabEnvironments() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
-      {/* Header Component */}
       <LabHeader onContactClick={() => setShowContactModal(true)} />
-
-      {/* Hero Component */}
       <LabHero />
-
-      {/* Pricing Models Component */}
       <LabPricingModels onPackageSelect={handlePackageSelect} selectedPricing={selectedPricing} />
 
       {/* Confirmation Modal */}
       <Dialog open={showConfirmationModal} onOpenChange={setShowConfirmationModal}>
-        <DialogContent
-          className="w-[95vw] max-w-lg mx-auto bg-white rounded-lg shadow-xl border border-gray-200 max-h-[95vh] overflow-hidden flex flex-col"
-          onWheel={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-        >
+        <DialogContent className="w-[95vw] max-w-lg mx-auto bg-white rounded-lg shadow-xl border border-gray-200 max-h-[95vh] overflow-hidden flex flex-col">
           <DialogHeader className="flex-shrink-0 text-center p-6 pb-4 border-b border-gray-100">
             <DialogTitle className="text-xl sm:text-2xl font-bold text-gray-900">Confirm Your Package</DialogTitle>
             {selectedPackageDetails && (
@@ -156,13 +163,8 @@ export default function LabEnvironments() {
             )}
           </DialogHeader>
 
-          {/* Scrollable Content */}
-          <div
-            className="flex-1 overflow-y-auto p-6 space-y-4 sm:space-y-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
-            onWheel={(e) => e.stopPropagation()}
-          >
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 sm:space-y-6 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
             <div className="space-y-4 sm:space-y-6 text-gray-700 text-xs sm:text-sm">
-              {/* Validity */}
               <div className="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <Info className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
@@ -192,14 +194,11 @@ export default function LabEnvironments() {
                 </div>
               </div>
 
-              {/* Component Type & License - Only for Distributed Cluster */}
               {selectedPackageDetails?.envTitle === "Splunk Distributed Cluster" && (
                 <div className="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 bg-purple-50 rounded-lg border border-purple-200">
                   <Server className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base">
-                      Splunk Developer License:
-                    </h4>
+                    <h4 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base">Splunk Developer License:</h4>
                     <p className="leading-relaxed text-xs sm:text-sm">
                       Do you have a Splunk Developer License? If not, you can apply for one{" "}
                       <a
@@ -210,15 +209,14 @@ export default function LabEnvironments() {
                       >
                         here
                       </a>
-                      . If you have a license, proceed with payment; otherwise, apply for the license and then proceed
-                      once you have it.
+                      .
                     </p>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Checkboxes */}
+            {/* Policy Agreement */}
             <div className="space-y-3 sm:space-y-4 pt-2">
               <div className="flex items-start space-x-2 sm:space-x-3">
                 <Checkbox
@@ -227,32 +225,19 @@ export default function LabEnvironments() {
                   onCheckedChange={setPolicyConfirmed}
                   className="mt-0.5"
                 />
-                <label
-                  htmlFor="policy-confirm"
-                  className="text-xs sm:text-sm font-medium leading-relaxed cursor-pointer"
-                >
+                <label htmlFor="policy-confirm" className="text-xs sm:text-sm font-medium leading-relaxed cursor-pointer">
                   I understand and agree to{" "}
-                  <Link href="/terms" className="text-blue-600 hover:underline font-medium">
-                    terms and conditions
-                  </Link>{" "}
+                  <Link href="/terms" className="text-blue-600 hover:underline font-medium">terms and conditions</Link>{" "}
                   and{" "}
-                  <Link href="/refund" className="text-blue-600 hover:underline font-medium">
-                    refund policy
-                  </Link>
-                  .
+                  <Link href="/refund" className="text-blue-600 hover:underline font-medium">refund policy</Link>.
                 </label>
               </div>
             </div>
           </div>
 
-          {/* Fixed Footer with Buttons */}
           <div className="flex-shrink-0 p-4 sm:p-6 pt-4 border-t border-gray-100 bg-gray-50">
             <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setShowConfirmationModal(false)}
-                className="w-full sm:w-auto order-2 sm:order-1"
-              >
+              <Button variant="outline" onClick={() => setShowConfirmationModal(false)} className="w-full sm:w-auto order-2 sm:order-1">
                 Cancel
               </Button>
               <Button
@@ -267,34 +252,18 @@ export default function LabEnvironments() {
         </DialogContent>
       </Dialog>
 
-      {/* Contact Modal Component */}
       <ContactModal isOpen={showContactModal} onClose={() => setShowContactModal(false)} />
-
-      {/* FAQ Component */}
       <LabFAQ />
-
-      {/* Footer Component */}
       <LabFooter />
+      <Salesiq />
 
       {showSuccessPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div
-            ref={popupRef}
-            className="relative max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-6 transition-all"
-          >
-            {/* Close Button */}
-            <button
-              onClick={() => setShowSuccessPopup(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-white"
-              aria-label="Close"
-            >
+          <div ref={popupRef} className="relative max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-6 transition-all">
+            <button onClick={() => setShowSuccessPopup(false)} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-white" aria-label="Close">
               <span className="text-lg font-semibold">&times;</span>
             </button>
-
-            {/* Title */}
             <h2 className="text-2xl font-semibold text-green-600 mb-3">Payment Successful!</h2>
-
-            {/* Message */}
             <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
               Your lab setup ticket has been created.
               <br />
@@ -305,8 +274,6 @@ export default function LabEnvironments() {
           </div>
         </div>
       )}
-
-      <Salesiq />
     </div>
   )
 }
