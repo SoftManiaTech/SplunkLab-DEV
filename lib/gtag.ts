@@ -1,14 +1,15 @@
-export const GA_TRACKING_ID = "G-WHVVB84Z78";
+// lib/gtag.ts
 
-// Call this to fire custom events
-export const event = ({
-  action,
-  params,
-}: {
-  action: string;
-  params: { [key: string]: any };
+export const GA_TRACKING_ID = 'G-XXXXXXXXXX' // replace with your ID
+
+// Standard GA event
+export const event = ({ action, params }: {
+  action: string,
+  params: Record<string, any>
 }) => {
-  if (typeof window !== "undefined") {
-    window.gtag("event", action, params);
+  if (typeof window !== 'undefined' && window.gtag) {
+    window.gtag('event', action, params)
+  } else {
+    console.warn("gtag not initialized")
   }
-};
+}
