@@ -37,6 +37,36 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialogHeader } from "@/components/ui/alert-dialog"
 
+import Script from 'next/script';
+
+function MyApp({ Component, pageProps }) {
+  return (
+    <>
+      {/* Load Google Analytics */}
+      <Script
+        strategy="afterInteractive"
+        src="https://www.googletagmanager.com/gtag/js?id=G-WHVVB84Z78"
+      />
+      <Script
+        id="google-analytics"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-XXXXXXXXXX');
+          `,
+        }}
+      />
+      <Component {...pageProps} />
+    </>
+  );
+}
+
+export default MyApp;
+
+
 // AWS Pricing Data - Separated by instance type
 const T2_MEDIUM_REGIONS = {
   "us-east-1": { name: "US East (N. Virginia)", price: 0.0464 },
