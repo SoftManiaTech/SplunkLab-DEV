@@ -29,7 +29,6 @@ export default function LabEnvironments() {
   const router = useRouter()
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const popupRef = useRef<HTMLDivElement | null>(null)
-
   const [expandedFeatures, setExpandedFeatures] = useState<Record<string, boolean>>({})
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({})
   const [showConfirmationModal, setShowConfirmationModal] = useState(false)
@@ -50,7 +49,6 @@ export default function LabEnvironments() {
     }))
   }
 
-  // 🔹 Track package selection
   const handlePackageSelect = (env: EnvironmentOption, option: (typeof env.pricing)[0]) => {
     setSelectedPackageDetails({
       amount: option.amount,
@@ -81,7 +79,6 @@ export default function LabEnvironments() {
     }
   }
 
-  // Prevent body scroll
   useEffect(() => {
     if (showConfirmationModal || showContactModal) {
       document.body.style.overflow = "hidden"
@@ -94,12 +91,11 @@ export default function LabEnvironments() {
     }
   }, [showConfirmationModal, showContactModal])
 
-  // 🔹 Track payment success
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+
     if (params.get("payment") === "success") {
       setShowSuccessPopup(true)
-
       event({
         action: "payment_success",
         params: {
@@ -107,11 +103,21 @@ export default function LabEnvironments() {
           timestamp: new Date().toISOString(),
         },
       })
-
-      const url = new URL(window.location.href)
-      url.searchParams.delete("payment")
-      window.history.replaceState({}, document.title, url.pathname)
     }
+
+    if (params.get("payment") === "failure") {
+      event({
+        action: "payment_failure",
+        params: {
+          source: "LabEnvironments",
+          timestamp: new Date().toISOString(),
+        },
+      })
+    }
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete("payment")
+    window.history.replaceState({}, document.title, url.pathname)
   }, [])
 
   useEffect(() => {
@@ -144,11 +150,24 @@ export default function LabEnvironments() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
-      <LabHeader onContactClick={() => setShowContactModal(true)} />
+      {/* 🔹 Track contact modal open from header */}
+      <LabHeader
+        onContactClick={() => {
+          setShowContactModal(true)
+          event({
+            action: "support_modal_open",
+            params: {
+              source: "header_contact",
+              page: "LabEnvironments",
+            },
+          })
+        }}
+      />
+
       <LabHero />
+
       <LabPricingModels onPackageSelect={handlePackageSelect} selectedPricing={selectedPricing} />
 
-      {/* Confirmation Modal */}
       <Dialog open={showConfirmationModal} onOpenChange={setShowConfirmationModal}>
         <DialogContent className="w-[95vw] max-w-lg mx-auto bg-white rounded-lg shadow-xl border border-gray-200 max-h-[95vh] overflow-hidden flex flex-col">
           <DialogHeader className="flex-shrink-0 text-center p-6 pb-4 border-b border-gray-100">
@@ -216,7 +235,6 @@ export default function LabEnvironments() {
               )}
             </div>
 
-            {/* Policy Agreement */}
             <div className="space-y-3 sm:space-y-4 pt-2">
               <div className="flex items-start space-x-2 sm:space-x-3">
                 <Checkbox
@@ -227,9 +245,32 @@ export default function LabEnvironments() {
                 />
                 <label htmlFor="policy-confirm" className="text-xs sm:text-sm font-medium leading-relaxed cursor-pointer">
                   I understand and agree to{" "}
-                  <Link href="/terms" className="text-blue-600 hover:underline font-medium">terms and conditions</Link>{" "}
+                  <Link
+                    href="/terms"
+                    className="text-blue-600 hover:underline font-medium"
+                    onClick={() =>
+                      event({
+                        action: "click_disclaimer",
+                        params: { type: "terms", page: "LabEnvironments" },
+                      })
+                    }
+                  >
+                    terms and conditions
+                  </Link>{" "}
                   and{" "}
-                  <Link href="/refund" className="text-blue-600 hover:underline font-medium">refund policy</Link>.
+                  <Link
+                    href="/refund"
+                    className="text-blue-600 hover:underline font-medium"
+                    onClick={() =>
+                      event({
+                        action: "click_disclaimer",
+                        params: { type: "refund", page: "LabEnvironments" },
+                      })
+                    }
+                  >
+                    refund policy
+                  </Link>
+                  .
                 </label>
               </div>
             </div>
