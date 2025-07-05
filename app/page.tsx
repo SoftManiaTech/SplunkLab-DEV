@@ -15,6 +15,28 @@ import { LabHero } from "@/components/lab-hero"
 import { LabPricingModels, type EnvironmentOption } from "@/components/lab-pricing-models"
 import { event } from "@/lib/gtag"
 
+const sendLogToSplunk = async (sessionId: string, eventText: string) => {
+  try {
+    const res = await fetch("https://api.ipify.org?format=json")
+    const ipData = await res.json()
+    const ip = ipData.ip
+
+    await fetch("/api/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ip,
+        session: sessionId,
+        event: eventText,
+        browser: navigator.userAgent,
+      }),
+    })
+  } catch (error) {
+    console.error("Failed to send log to Splunk:", error)
+  }
+}
+
+
 interface SelectedPackageDetails {
   amount: number
   hours: number
@@ -50,6 +72,11 @@ export default function LabEnvironments() {
   }
 
   const handlePackageSelect = (env: EnvironmentOption, option: (typeof env.pricing)[0]) => {
+    const sessionId = `PLAN-${Math.random().toString(36).substring(2, 10)}`
+sendLogToSplunk(
+  sessionId,
+  `User selected package: ${env.title} (${option.amount}₹ for ${option.hours} hrs)`
+)
     setSelectedPackageDetails({
       amount: option.amount,
       hours: option.hours,
@@ -80,6 +107,8 @@ export default function LabEnvironments() {
   }
 
   useEffect(() => {
+    const sessionId = `SID-${Math.random().toString(36).substring(2, 10)}`
+  sendLogToSplunk(sessionId, "User visited LabEnvironments Page")
     if (showConfirmationModal || showContactModal) {
       document.body.style.overflow = "hidden"
     } else {
@@ -92,9 +121,13 @@ export default function LabEnvironments() {
   }, [showConfirmationModal, showContactModal])
 
   useEffect(() => {
+    const sessionId = `SID-${Math.random().toString(36).substring(2, 10)}`
+  sendLogToSplunk(sessionId, "User visited LabEnvironments Page")
     const params = new URLSearchParams(window.location.search)
 
     if (params.get("payment") === "success") {
+      sendLogToSplunk("payment-session", "Payment success for selected plan")
+
       setShowSuccessPopup(true)
       event({
         action: "payment_success",
@@ -106,6 +139,8 @@ export default function LabEnvironments() {
     }
 
     if (params.get("payment") === "failure") {
+      sendLogToSplunk("payment-session", "Payment failure for selected plan")
+
       event({
         action: "payment_failure",
         params: {
@@ -121,6 +156,8 @@ export default function LabEnvironments() {
   }, [])
 
   useEffect(() => {
+    const sessionId = `SID-${Math.random().toString(36).substring(2, 10)}`
+  sendLogToSplunk(sessionId, "User visited LabEnvironments Page")
     function handleClickOutside(event: MouseEvent) {
       if (popupRef.current && !popupRef.current.contains(event.target as Node)) {
         setShowSuccessPopup(false)
@@ -137,6 +174,8 @@ export default function LabEnvironments() {
   }, [showSuccessPopup])
 
   useEffect(() => {
+    const sessionId = `SID-${Math.random().toString(36).substring(2, 10)}`
+  sendLogToSplunk(sessionId, "User visited LabEnvironments Page")
     const threshold = 160
     const checkDevTools = () => {
       if (window.outerHeight - window.innerHeight > threshold) {
@@ -154,6 +193,7 @@ export default function LabEnvironments() {
       <LabHeader
         onContactClick={() => {
           setShowContactModal(true)
+          sendLogToSplunk("SID-labenvironments", 'User clicked "Sales Contact"')
           event({
             action: "support_modal_open",
             params: {
