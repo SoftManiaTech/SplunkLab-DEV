@@ -1,34 +1,32 @@
-// app/api/log/route.ts
-
-import { NextRequest, NextResponse } from "next/server";
-import { logToSplunk } from "@/lib/logger";
+import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const {
-      ip = "unknown",
-      session = "no-session",
-      event = "no-event",
-      browser = req.headers.get("user-agent") || "unknown",
-    } = body;
+    const body = await req.json()
 
-    const timestamp = new Date().toLocaleString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      hour12: true,
-    });
+    const payload = {
+      event: {
+        ip: body.ip || "unknown",
+        session: body.session || "no-session",
+        event: body.event || "no-event",
+        browser: body.browser || "no-browser",
+      },
+      time: Math.floor(Date.now() / 1000),
+      sourcetype: "_json",
+    }
 
-    const result = await logToSplunk({
-      ip,
-      session,
-      event,
-      browser,
-      timestamp,
-    });
+    const response = await fetch("http://prod-splunk.softmania.in:8000/services/collector", {
+      method: "POST",
+      headers: {
+        "Authorization": "Splunk c696212a-862b-4ecf-b5ef-82b331210b48",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
 
-    return NextResponse.json({ status: "success", result });
-  } catch (err: any) {
-    console.error("API Error in /api/log:", err);
-    return NextResponse.json({ status: "error", message: err.message }, { status: 500 });
+    return new NextResponse("Logged to Splunk", { status: response.ok ? 200 : 500 })
+  } catch (err) {
+    console.error("Splunk log error:", err)
+    return new NextResponse("Logging failed", { status: 500 })
   }
 }
