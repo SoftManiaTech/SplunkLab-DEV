@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     canonical: "https://splunklab.softmania.in",
   },
   openGraph: {
-    title: "SplunkLab - SoftMania | Budget-Friendly Splunk Environments",
+    title: "Splunk Lab - Soft Mania | Budget-Friendly Splunk Environments",
     description:
       "Launch and manage Standalone, Distributed, and Clustered Splunk labs within your budget and timeframe. Splunk Lab - Soft Mania offers quick, cost-effective deployment solutions for learning, development, and testing.",
     url: "https://splunklab.softmania.in",

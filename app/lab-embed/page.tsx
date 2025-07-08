@@ -1,10 +1,16 @@
-import { Suspense } from 'react';
-import LabEmbedWrapper from '@/components/LabEmbedWrapper';
+'use client';
 
-export default function LabEmbedPage() {
+import dynamic from 'next/dynamic';
+
+// Dynamically import your React App component (disable SSR)
+const LabApp = dynamic(() => import('@/components/LabManagerApp-embed/App'), {
+  ssr: false,
+});
+
+export default function LabPage() {
   return (
-    <Suspense fallback={<div className="text-center p-10">Loading...</div>}>
-      <LabEmbedWrapper />
-    </Suspense>
+    <div style={{ height: '100vh' }}>
+      <LabApp />
+    </div>
   );
 }

@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, JSX } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleOAuthProvider, CredentialResponse } from '@react-oauth/google';
+import { GoogleOAuthProvider, GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import EC2Table from './components/EC2Table';
+import { SoftmaniaLogo } from "@/components/softmania-logo";
+import Link from 'next/link';
 import * as CryptoJS from 'crypto-js';
-import { DownloadIcon } from 'lucide-react';
-import { FcGoogle } from 'react-icons/fc';
+import { DownloadIcon, RefreshCcw } from 'lucide-react';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_CLIENT_ID as string;
 const API_URL = process.env.NEXT_PUBLIC_API_URL as string;
@@ -21,8 +22,6 @@ function App(): JSX.Element {
   const [hasLab, setHasLab] = useState<boolean | null>(null);
   const router = useRouter();
   const [userName, setUserName] = useState<string>('');
-  const [checkedLogin, setCheckedLogin] = useState(false);
-
 
   const SECRET_KEY = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || 'softmania_secret';
 
@@ -53,41 +52,6 @@ function App(): JSX.Element {
       return '';
     }
   };
-
-  const checkLoginFromStorage = async () => {
-    const encryptedEmail = localStorage.getItem('userEmail');
-    const encryptedLoginTime = localStorage.getItem('loginTime');
-
-    if (encryptedEmail && encryptedLoginTime) {
-      const storedEmail = decrypt(encryptedEmail);
-      const encryptedName = localStorage.getItem('userName');
-      const storedName = encryptedName ? decrypt(encryptedName) : '';
-      setUserName(storedName);
-
-      const loginTime = parseInt(decrypt(encryptedLoginTime), 10);
-      const now = new Date().getTime();
-      const timeElapsed = now - loginTime;
-
-      if (timeElapsed < SESSION_DURATION_MS) {
-        setEmail(storedEmail);
-        const has = await checkIfUserHasLab(storedEmail);
-        if (has) {
-          fetchInstances(storedEmail);
-          fetchUsageSummary(storedEmail);
-          fetchPemFiles(storedEmail);
-        }
-      } else {
-        localStorage.clear(); // expired
-      }
-    }
-    setCheckedLogin(true);
-  };
-
-  useEffect(() => {
-    const onStorageChange = () => checkLoginFromStorage();
-    window.addEventListener('storage', onStorageChange);
-    return () => window.removeEventListener('storage', onStorageChange);
-  }, []);
 
   const formatFloatHours = (hours: number): string => {
     const h = Math.floor(hours);
@@ -205,6 +169,7 @@ function App(): JSX.Element {
       setUserName(storedName);
 
       const loginTime = parseInt(decrypt(encryptedLoginTime), 10);
+
       const now = new Date().getTime();
       const timeElapsed = now - loginTime;
 
@@ -218,7 +183,10 @@ function App(): JSX.Element {
           }
         });
       } else {
-        localStorage.clear(); // expired
+        localStorage.removeItem('userEmail');
+        localStorage.removeItem('loginTime');
+        localStorage.removeItem('userName');
+        setUserName('');
       }
     }
   }, []);
@@ -255,26 +223,7 @@ function App(): JSX.Element {
         {!email ? (
           <div className="flex flex-col items-center justify-center mt-16">
             <h2 className="text-xl font-semibold mb-4 text-gray-800">Login using Google</h2>
-            <button
-  onClick={() => {
-    const clientId = process.env.NEXT_PUBLIC_CLIENT_ID!;
-    const redirectUri = `${process.env.NEXT_PUBLIC_BACKEND_URL}`; // replace with production
-    const scope = 'openid email profile';
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
-      redirectUri
-    )}&response_type=code&scope=${encodeURIComponent(
-      scope
-    )}&prompt=consent&access_type=offline`;
-
-    window.location.href = authUrl;
-  }}
-  className="flex items-center gap-3 px-4 py-2 border border-gray-300 rounded-lg shadow-sm bg-white hover:shadow-md transition-all duration-200"
->
-  <FcGoogle className="w-5 h-5" />
-  <span className="text-gray-700 font-medium text-sm">Sign in with Google</span>
-</button>
-
-
+            <GoogleLogin onSuccess={handleLogin} onError={() => console.log("Login Failed")} />
           </div>
         ) : hasLab === null ? (
           <div className="text-center mt-10 text-gray-600">Checking your lab assignment...</div>
