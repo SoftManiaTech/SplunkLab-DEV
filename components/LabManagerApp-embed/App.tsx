@@ -2,13 +2,12 @@
 
 import React, { useState, useEffect, JSX } from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleOAuthProvider, GoogleLogin, CredentialResponse } from '@react-oauth/google';
+import { GoogleOAuthProvider, CredentialResponse } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import EC2Table from './components/EC2Table';
-import { SoftmaniaLogo } from "@/components/softmania-logo";
-import Link from 'next/link';
 import * as CryptoJS from 'crypto-js';
-import { DownloadIcon, RefreshCcw } from 'lucide-react';
+import { DownloadIcon } from 'lucide-react';
+import { FcGoogle } from 'react-icons/fc';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_CLIENT_ID as string;
 const API_URL = process.env.NEXT_PUBLIC_API_URL as string;
@@ -22,6 +21,8 @@ function App(): JSX.Element {
   const [hasLab, setHasLab] = useState<boolean | null>(null);
   const router = useRouter();
   const [userName, setUserName] = useState<string>('');
+  const [checkedLogin, setCheckedLogin] = useState(false);
+
 
   const SECRET_KEY = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || 'softmania_secret';
 
@@ -53,11 +54,40 @@ function App(): JSX.Element {
     }
   };
 
-  const getUsernameFromEmail = (email: string): string => {
-    if (!email) return '';
-    const namePart = email.split('@')[0];
-    return namePart.charAt(0).toUpperCase() + namePart.slice(1);
+  const checkLoginFromStorage = async () => {
+    const encryptedEmail = localStorage.getItem('userEmail');
+    const encryptedLoginTime = localStorage.getItem('loginTime');
+
+    if (encryptedEmail && encryptedLoginTime) {
+      const storedEmail = decrypt(encryptedEmail);
+      const encryptedName = localStorage.getItem('userName');
+      const storedName = encryptedName ? decrypt(encryptedName) : '';
+      setUserName(storedName);
+
+      const loginTime = parseInt(decrypt(encryptedLoginTime), 10);
+      const now = new Date().getTime();
+      const timeElapsed = now - loginTime;
+
+      if (timeElapsed < SESSION_DURATION_MS) {
+        setEmail(storedEmail);
+        const has = await checkIfUserHasLab(storedEmail);
+        if (has) {
+          fetchInstances(storedEmail);
+          fetchUsageSummary(storedEmail);
+          fetchPemFiles(storedEmail);
+        }
+      } else {
+        localStorage.clear(); // expired
+      }
+    }
+    setCheckedLogin(true);
   };
+
+  useEffect(() => {
+    const onStorageChange = () => checkLoginFromStorage();
+    window.addEventListener('storage', onStorageChange);
+    return () => window.removeEventListener('storage', onStorageChange);
+  }, []);
 
   const formatFloatHours = (hours: number): string => {
     const h = Math.floor(hours);
@@ -175,7 +205,6 @@ function App(): JSX.Element {
       setUserName(storedName);
 
       const loginTime = parseInt(decrypt(encryptedLoginTime), 10);
-
       const now = new Date().getTime();
       const timeElapsed = now - loginTime;
 
@@ -189,10 +218,7 @@ function App(): JSX.Element {
           }
         });
       } else {
-        localStorage.removeItem('userEmail');
-        localStorage.removeItem('loginTime');
-        localStorage.removeItem('userName');
-        setUserName('');
+        localStorage.clear(); // expired
       }
     }
   }, []);
@@ -224,110 +250,36 @@ function App(): JSX.Element {
 
   return (
     <GoogleOAuthProvider clientId={CLIENT_ID}>
-      <header className="border-b border-gray-100 bg-white/95 sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" passHref><SoftmaniaLogo size="md" /></Link>
-          <h2 className="text-xl font-extrabold text-gray-800">Lab Manager</h2>
-        </div>
-      </header>
 
       <div style={{ padding: 20 }}>
         {!email ? (
           <div className="flex flex-col items-center justify-center mt-16">
             <h2 className="text-xl font-semibold mb-4 text-gray-800">Login using Google</h2>
-            <GoogleLogin onSuccess={handleLogin} onError={() => console.log("Login Failed")} />
+            <button
+  onClick={() => {
+    const clientId = process.env.NEXT_PUBLIC_CLIENT_ID!;
+    const redirectUri = `${process.env.NEXT_PUBLIC_BACKEND_URL}`; // replace with production
+    const scope = 'openid email profile';
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+      redirectUri
+    )}&response_type=code&scope=${encodeURIComponent(
+      scope
+    )}&prompt=consent&access_type=offline`;
+
+    window.location.href = authUrl;
+  }}
+  className="flex items-center gap-3 px-4 py-2 border border-gray-300 rounded-lg shadow-sm bg-white hover:shadow-md transition-all duration-200"
+>
+  <FcGoogle className="w-5 h-5" />
+  <span className="text-gray-700 font-medium text-sm">Sign in with Google</span>
+</button>
+
+
           </div>
         ) : hasLab === null ? (
           <div className="text-center mt-10 text-gray-600">Checking your lab assignment...</div>
         ) : hasLab ? (
           <>
-            <div className="bg-[#f4f6fa] shadow-sm rounded-lg p-5 mb-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <h2 className="text-lg text-[#2c3e50] font-bold">
-                    Welcome back, <span className="text-[#007acc]">{userName}</span>
-                  </h2>
-                  <p className="text-sm text-[#34495e]">
-                    This is your personal <strong>Lab server Manager Dashboard</strong> 🚀
-                  </p>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="mt-2 sm:mt-0 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-                >
-                  Logout
-                </button>
-              </div>
-
-              {usage && (
-                <div className="w-full text-sm mt-4">
-                  {(usage.balance_hours <= 0 || usage.balance_days <= 0) && (
-                    <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md px-4 py-2 mb-3">
-                      ⚠️ <strong>Your purchased quota has finished.</strong> Your instance will be terminated soon.
-                    </div>
-                  )}
-
-                  {/* Desktop View */}
-                  <div className={`hidden sm:flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg px-4 py-3 ${usage.balance_hours <= 0 || usage.balance_days <= 0
-                    ? 'bg-red-50 border border-red-200 text-red-800'
-                    : 'bg-green-50 border border-green-200 text-gray-800'
-                    }`}>
-                    <span><strong>Quota Hours:</strong> {formatFloatHours(usage.quota_hours)} hrs</span>
-                    <span><strong>Used Hours:</strong> {formatFloatHours(usage.used_hours)} hrs</span>
-                    <span><strong>Balance Hours:</strong> {formatFloatHours(usage.balance_hours)} hrs</span>
-                    <span className="mx-2 text-gray-400">|</span>
-                    <span><strong>Validity:</strong> {usage.quota_days} days</span>
-                    <span><strong>Plan Start Date:</strong> {usage.plan_start_date || 'N/A'}</span>
-                    <span className="flex items-center gap-2">
-                      <strong>Plan End Date:</strong> {usage.plan_end_date || 'N/A'}
-                      <span className="text-red-500">(will be terminated on this date.)</span>
-                      <button
-                        onClick={() => fetchUsageSummary(email)}
-                        disabled={refreshing}
-                        className={`p-2 rounded-full ${refreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-600 text-gray-700'} text-white`}
-                        title="Refresh"
-                      >
-                        <RefreshCcw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                      </button>
-                    </span>
-                  </div>
-
-                  {/* Mobile View */}
-                  <div className={`sm:hidden flex flex-col gap-3 rounded-lg px-4 py-3 ${usage.balance_hours <= 0 || usage.balance_days <= 0
-                    ? 'bg-red-50 border border-red-200 text-red-800'
-                    : 'bg-green-50 border border-green-200 text-gray-800'
-                    }`}>
-                    <div className="flex flex-col gap-1">
-                      <p><strong>Quota Days:</strong> {usage.quota_days} days</p>
-                      <p><strong>Used Days:</strong> {usage.used_days.toFixed(1)} days</p>
-                      <p><strong>Balance Days:</strong> {usage.balance_days.toFixed(1)} days</p>
-                      <p><strong>Plan Start Date:</strong> {usage.plan_start_date || 'N/A'}</p>
-                      <div className="flex items-center gap-2">
-                        <p><strong>Plan End Date:</strong> {usage.plan_end_date || 'N/A'} <span className="text-gray-500">(will be terminated on this date.)</span></p>
-                        <button
-                          onClick={() => fetchUsageSummary(email)}
-                          disabled={refreshing}
-                          className={`p-2 rounded-full ${refreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'} text-white`}
-                          title="Refresh"
-                        >
-                          <RefreshCcw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 pt-2 border-t border-current">
-                      <p><strong>Quota Hours:</strong> {formatFloatHours(usage.quota_hours)} hrs</p>
-                      <p><strong>Used Hours:</strong> {formatFloatHours(usage.used_hours)} hrs</p>
-                      <p><strong>Balance Hours:</strong> {formatFloatHours(usage.balance_hours)} hrs</p>
-                    </div>
-                  </div>
-
-                  <p className="mt-3 text-sm text-gray-600">
-                    If you are facing any issues accessing your lab server, please reach out to <a href="mailto:labsupport@softmania.in" className="text-blue-600 underline">labsupport@softmania.in</a>.
-                  </p>
-                </div>
-              )}
-            </div>
-
             <EC2Table
               email={email}
               instances={instances}
@@ -338,7 +290,7 @@ function App(): JSX.Element {
             {pemFiles.length > 0 && (
               <div className="bg-white shadow-md rounded-2xl p-5 mb-6 border border-gray-200 mt-[10px]">
                 <h3 className="text-lg font-bold text-gray-800 mb-4">SSH PEM Files</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {pemFiles.map((file, idx) => (
                     <div
                       key={idx}
