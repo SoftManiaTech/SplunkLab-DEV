@@ -1,9 +1,5 @@
-import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
-
-const LabEmbedWrapper = dynamic(() => import('@/components/LabEmbedWrapper'), {
-  ssr: false,
-});
+import LabEmbedWrapper from '@/components/LabEmbedWrapper';
 
 export default function LabEmbedPage() {
   return (
