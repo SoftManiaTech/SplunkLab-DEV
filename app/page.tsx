@@ -22,7 +22,7 @@ import {
   type EnvironmentOption,
 } from "@/components/lab-pricing-models";
 import { event } from "@/lib/gtag";
-
+import { event as sendToGA4 } from "@/lib/gtag";
 // Splunk Logging Integration
 const getClientIp = async () => {
   try {
@@ -59,9 +59,10 @@ const sendLogToSplunk = async ({
       ip,
       browser,
       timestamp: new Date().toISOString(),
-      ...details, // Merge in amount, hours, etc.
+      ...details,
     };
 
+    // ✅ 1. Send to Splunk
     await fetch("/api/log", {
       method: "POST",
       headers: {
@@ -69,8 +70,20 @@ const sendLogToSplunk = async ({
       },
       body: JSON.stringify(payload),
     });
+
+    // ✅ 2. Send to GA4
+    sendToGA4({
+      action, // e.g., "select_package"
+      params: {
+        session: sessionId,
+        ip,
+        browser,
+        title,
+        ...details,
+      },
+    });
   } catch (err) {
-    console.error("Splunk logging failed:", err);
+    console.error("Splunk + GA4 logging failed:", err);
   }
 };
 
@@ -310,7 +323,7 @@ export default function LabEnvironments() {
           action: "devtools_detected",
           title: "DevTools Detected",
         });
-        window.location.href = "https://splunklab.softmania.in/blocked";
+        window.location.href = "https://splunklab.softmania.com/blocked";
       }
     };
 
@@ -400,28 +413,28 @@ export default function LabEnvironments() {
               </div>
               {selectedPackageDetails?.envTitle ===
                 "Splunk Distributed Cluster" && (
-                  <div className="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <Server className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base">
-                        Splunk Developer License:
-                      </h4>
-                      <p className="leading-relaxed text-xs sm:text-sm">
-                        Do you have a Splunk Developer License? If not, you can
-                        apply for one{" "}
-                        <a
-                          href="https://dev.splunk.com/enterprise/dev_license"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline font-medium"
-                        >
-                          here
-                        </a>
-                        .
-                      </p>
-                    </div>
+                <div className="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <Server className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base">
+                      Splunk Developer License:
+                    </h4>
+                    <p className="leading-relaxed text-xs sm:text-sm">
+                      Do you have a Splunk Developer License? If not, you can
+                      apply for one{" "}
+                      <a
+                        href="https://dev.splunk.com/enterprise/dev_license"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline font-medium"
+                      >
+                        here
+                      </a>
+                      .
+                    </p>
                   </div>
-                )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 sm:space-y-4 pt-2">
@@ -533,13 +546,13 @@ export default function LabEnvironments() {
               Payment Successful!
             </h2>
             <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-              Your lab setup ticket has been created successfully.
+              Your lab setup ticket has been created.
               <br />
-              Lab setup in progress — ready within <strong>20-30 mins</strong>.
+              Please check your email for confirmation.
               <br />
-              You'll get a welcome email once it's live.
-              <br />
-              Server auto-stops after <strong>2 hours</strong>, or stop manually to save usage.
+              Lab will be delivered within <strong>
+                10–12 hours
+              </strong> during <strong>10 AM – 6 PM IST</strong>.
             </p>
           </div>
         </div>
