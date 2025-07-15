@@ -1,9 +1,24 @@
 import { Html, Head, Main, NextScript } from "next/document"
-
+import { GA_TRACKING_ID } from '@/lib/gtag';
 export default function Document() {
   return (
     <Html lang="en">
       <Head>
+        <Head>
+  {/* Google tag (gtag.js) */}
+  <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_TRACKING_ID}`} />
+  <script
+    dangerouslySetInnerHTML={{
+      __html: `
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '${GA_TRACKING_ID}');
+      `,
+    }}
+  />
+</Head>
+
         <meta property="og:title" content="Splunk Lab - Soft Mania | Budget-Friendly Splunk Environments" />
         <meta property="og:description" content="Launch and manage Standalone, Distributed, and Clustered Splunk labs within your budget and timeframe. Splunk Lab - Soft Mania offers quick, cost-effective deployment solutions for learning, development, and testing." />
         <meta property="og:image" content="https://splunklab.softmania.in/Splunk-Lab-Wizard.png" />
