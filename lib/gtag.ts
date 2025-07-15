@@ -3,7 +3,7 @@ declare global {
     gtag?: (...args: any[]) => void;
   }
 }
-export const GA_TRACKING_ID = 'G-MR54RYZW34'; // ✅ your current GA4 ID
+export const GA_TRACKING_ID = 'G-MR54RYZW34'; // add ID here and add in layut.tsx file also.
 export const event = ({
   action,
   params,
