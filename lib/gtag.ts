@@ -3,7 +3,15 @@ declare global {
     gtag?: (...args: any[]) => void;
   }
 }
-export const GA_TRACKING_ID = 'G-MR54RYZW34'; // add ID here and add in layut.tsx file also.
+
+// Replace with your real GA4 Measurement ID
+export const GA_TRACKING_ID = "G-MR54RYZW34";
+
+/**
+ * Sends an event to Google Analytics 4.
+ * @param action - The event name.
+ * @param params - Custom event parameters.
+ */
 export const event = ({
   action,
   params,
@@ -11,9 +19,24 @@ export const event = ({
   action: string;
   params: Record<string, any>;
 }) => {
-  if (typeof window !== 'undefined' && window.gtag) {
-    window.gtag('event', action, params);
+  if (typeof window !== "undefined" && typeof window.gtag === "function") {
+    const sanitizedParams: Record<string, string | number | boolean | null> = {};
+
+    for (const key in params) {
+      const value = params[key];
+      if (
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean" ||
+        value === null
+      ) {
+        sanitizedParams[key] = value;
+      }
+    }
+
+    window.gtag("event", action, sanitizedParams);
+    console.log(`[GA4] Event: ${action}`, sanitizedParams);
   } else {
-    console.warn('gtag not initialized');
+    console.warn("[GA4] gtag not initialized or unavailable.");
   }
 };
