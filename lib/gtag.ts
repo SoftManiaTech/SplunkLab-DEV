@@ -5,7 +5,7 @@ declare global {
 }
 
 // Replace with your real GA4 Measurement ID
-export const GA_TRACKING_ID = "G-WHVVB84Z78";
+const GA_TRACKING_ID = process.env.GA_TRACKING_ID || "";
 
 /**
  * Sends an event to Google Analytics 4.
