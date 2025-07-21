@@ -172,8 +172,9 @@ function App(): JSX.Element {
       setEmail(userEmail);
       setUserName(fullName);
 
+      // ✅ Send log to Splunk + GA4 for Google login
       try {
-        const ip = await getClientIp();
+        const ip = await getClientIp(); // same logic you used in page.tsx
 
         const payload = {
           ip,
@@ -187,7 +188,7 @@ function App(): JSX.Element {
           timestamp: new Date().toISOString(),
         };
 
-        // ✅ Send to Splunk
+        // ✅ Send to Splunk (no change)
         await fetch("/api/log", {
           method: "POST",
           headers: {
@@ -196,29 +197,29 @@ function App(): JSX.Element {
           body: JSON.stringify(payload),
         });
 
-        // ✅ Also send to GA4 (uses your gtag.ts)
+        // ✅ Send to GA4 (new)
         if (
           typeof window !== "undefined" &&
           typeof window.gtag === "function"
         ) {
-          window.gtag("event", "google_login", {
-            session: userEmail,
-            ip,
-            name: fullName,
-            email: userEmail,
-            browser: navigator.userAgent,
-            title: "User logged in with Google",
-            timestamp: new Date().toISOString(),
+          window.gtag("event", "google_login", payload);
+          console.log("[GA4] Event: google_login", payload);
+
+          // Count logins per user in localStorage
+          const loginKey = `google_login_count_${userEmail}`;
+          const currentCount =
+            parseInt(localStorage.getItem(loginKey) || "0", 10) + 1;
+          localStorage.setItem(loginKey, currentCount.toString());
+
+          // Set user ID and user property
+          window.gtag("config", process.env.G_TAG, {
+            user_id: userEmail,
           });
-          console.log("[GA4] Event: google_login", {
-            session: userEmail,
-            ip,
-            name: fullName,
-            email: userEmail,
-            browser: navigator.userAgent,
-            title: "User logged in with Google",
-            timestamp: new Date().toISOString(),
+          window.gtag("set", "user_properties", {
+            google_login_count: currentCount,
           });
+        } else {
+          console.warn("[GA4] gtag not initialized or unavailable.");
         }
       } catch (err) {
         console.error("Google login log failed:", err);
