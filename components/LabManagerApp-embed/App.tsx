@@ -16,6 +16,7 @@ import { DownloadIcon, RefreshCcw } from "lucide-react";
 
 // Log user event to Splunk/GA4 endpoint
 const logUserEvent = async (eventData: Record<string, any>) => {
+  console.log("[Debug] Logging user event:", eventData); // ✅ Add this
   try {
     await fetch(`${API_URL}/log-user-event`, {
       method: "POST",
