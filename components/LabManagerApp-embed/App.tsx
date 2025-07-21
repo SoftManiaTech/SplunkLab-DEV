@@ -14,20 +14,6 @@ import Link from "next/link";
 import * as CryptoJS from "crypto-js";
 import { DownloadIcon, RefreshCcw } from "lucide-react";
 
-// Log user event to Splunk/GA4 endpoint
-const logUserEvent = async (eventData: Record<string, any>) => {
-  console.log("[Debug] Logging user event:", eventData); // ✅ Add this
-  try {
-    await fetch(`${API_URL}/log-user-event`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(eventData),
-    });
-  } catch (err) {
-    console.error("Error logging user event:", err);
-  }
-};
-
 const getClientIp = async () => {
   try {
     const res = await fetch("https://api.ipify.org?format=json");
@@ -186,7 +172,7 @@ function App(): JSX.Element {
       setEmail(userEmail);
       setUserName(fullName);
 
-      // ✅ Optional: Keep your original log to /log-user-login
+      // Optional: keep your old backend log
       await fetch(`${API_URL}/log-user-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,19 +183,54 @@ function App(): JSX.Element {
         }),
       });
 
-      // ✅ New: Unified log to Splunk + GA4
-      const ip = await getClientIp();
-      await logUserEvent({
-        ip,
-        action: "google_login",
-        event: "google_login",
-        title: "User logged in via Google",
-        session: userEmail,
-        email: userEmail,
-        name: fullName,
-        browser: navigator.userAgent,
-        timestamp: new Date().toISOString(),
-      });
+      // ✅ Splunk + GA4 unified logging
+      try {
+        const ip = await getClientIp();
+        const payload = {
+          ip,
+          action: "google_login",
+          session: userEmail,
+          name: fullName,
+          email: userEmail,
+          event: "google_login",
+          browser: navigator.userAgent,
+          title: "User logged in with Google",
+          timestamp: new Date().toISOString(),
+        };
+
+        // Splunk
+        await fetch("/api/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        // GA4
+        if (
+          typeof window !== "undefined" &&
+          typeof window.gtag === "function"
+        ) {
+          window.gtag("event", "google_login", payload);
+          console.log("[GA4] Event: google_login", payload);
+
+          // Count logins
+          const loginKey = `google_login_count_${userEmail}`;
+          const currentCount =
+            parseInt(localStorage.getItem(loginKey) || "0", 10) + 1;
+          localStorage.setItem(loginKey, currentCount.toString());
+
+          window.gtag("config", process.env.G_TAG, {
+            user_id: userEmail,
+          });
+          window.gtag("set", "user_properties", {
+            google_login_count: currentCount,
+          });
+        } else {
+          console.warn("[GA4] gtag not initialized or unavailable.");
+        }
+      } catch (err) {
+        console.error("Google login log failed:", err);
+      }
 
       const userHasLab = await checkIfUserHasLab(userEmail);
       if (userHasLab) {
