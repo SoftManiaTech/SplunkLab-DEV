@@ -172,9 +172,8 @@ function App(): JSX.Element {
       setEmail(userEmail);
       setUserName(fullName);
 
-      // ✅ Send log to Splunk for Google login
       try {
-        const ip = await getClientIp(); // same logic you used in page.tsx
+        const ip = await getClientIp();
 
         const payload = {
           ip,
@@ -188,6 +187,7 @@ function App(): JSX.Element {
           timestamp: new Date().toISOString(),
         };
 
+        // ✅ Send to Splunk
         await fetch("/api/log", {
           method: "POST",
           headers: {
@@ -195,8 +195,33 @@ function App(): JSX.Element {
           },
           body: JSON.stringify(payload),
         });
+
+        // ✅ Also send to GA4 (uses your gtag.ts)
+        if (
+          typeof window !== "undefined" &&
+          typeof window.gtag === "function"
+        ) {
+          window.gtag("event", "google_login", {
+            session: userEmail,
+            ip,
+            name: fullName,
+            email: userEmail,
+            browser: navigator.userAgent,
+            title: "User logged in with Google",
+            timestamp: new Date().toISOString(),
+          });
+          console.log("[GA4] Event: google_login", {
+            session: userEmail,
+            ip,
+            name: fullName,
+            email: userEmail,
+            browser: navigator.userAgent,
+            title: "User logged in with Google",
+            timestamp: new Date().toISOString(),
+          });
+        }
       } catch (err) {
-        console.error("Splunk Google login log failed:", err);
+        console.error("Google login log failed:", err);
       }
 
       const userHasLab = await checkIfUserHasLab(userEmail);
