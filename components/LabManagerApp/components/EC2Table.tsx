@@ -13,6 +13,7 @@ interface EC2Instance {
   PublicIp: string;
   SSHCommand: string;
   Region: string;
+  ServiceType: string;
 }
 
 interface EC2TableProps {
@@ -248,6 +249,13 @@ const EC2Table: React.FC<EC2TableProps> = ({
     );
   }
 
+  const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>((acc, inst) => {
+    const key = inst.ServiceType || "Unknown";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(inst);
+    return acc;
+  }, {});
+
   return (
     <div style={{ marginTop: 20 }}>
       <div className="flex justify-between items-center mb-3">
@@ -255,11 +263,10 @@ const EC2Table: React.FC<EC2TableProps> = ({
         <button
           onClick={fetchInstances}
           disabled={refreshing}
-          className={`p-2 rounded-full ${
-            refreshing
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-amber-500 hover:bg-amber-600 text-gray-700"
-          } text-white`}
+          className={`p-2 rounded-full ${refreshing
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-amber-500 hover:bg-amber-600 text-gray-700"
+            } text-white`}
           title="Refresh"
         >
           <RefreshCcw
@@ -268,113 +275,130 @@ const EC2Table: React.FC<EC2TableProps> = ({
         </button>
       </div>
 
-      <div
-        style={{
-          overflowX: "auto",
-          width: "100%",
-          borderRadius: 8,
-          border: "1px solid #e2e8f0",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            minWidth: 800,
-            fontSize: "0.95rem",
-            fontFamily: "Inter, sans-serif",
-          }}
-        >
-          <thead>
-            <tr style={{ backgroundColor: "#f1f5f9", textAlign: "left" }}>
-              <th style={{ padding: "10px" }}>Server Name</th>
-              <th style={{ padding: "10px" }}>State</th>
-              <th style={{ padding: "10px" }}>Private IP</th>
-              <th style={{ padding: "10px" }}>Public IP</th>
-              <th style={{ padding: "10px" }}>SSH Command</th>
-              <th style={{ padding: "10px" }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {instances.map((inst) => {
-              const state = inst.State.toLowerCase();
-              const isStopped = state === "stopped";
-              const isRunning = state === "running";
-              const isMutedState = ["pending", "starting"].includes(state);
-              const isBusyState = [
-                "pending",
-                "starting",
-                "stopping",
-                "rebooting",
-              ].includes(state);
+      {/* 🔽 Split by ServiceType */}
+      {Object.entries(
+        instances.reduce((grouped, inst) => {
+          const group = inst.ServiceType || "Unknown";
+          if (!grouped[group]) grouped[group] = [];
+          grouped[group].push(inst);
+          return grouped;
+        }, {} as Record<string, EC2Instance[]>)
+      ).map(([serviceType, instanceGroup]) => (
+        <div key={serviceType} style={{ marginBottom: 40 }}>
+          <h3 className="text-md font-semibold text-green-600 mb-2">
+            {serviceType} Servers
+          </h3>
 
-              return (
-                <tr
-                  key={inst.InstanceId}
-                  style={{ borderTop: "1px solid #e5e7eb" }}
-                >
-                  <td style={{ padding: "10px" }}>{inst.Name}</td>
-                  <td
-                    style={{
-                      padding: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                    }}
-                  >
-                    {inst.State}
-                    {isBusyState && (
-                      <Loader2
-                        size={14}
-                        className="animate-spin text-gray-500"
-                      />
-                    )}
-                  </td>
-                  <td style={{ padding: "10px" }}>
-                    {inst.PrivateIp
-                      ? renderCopyField(
-                          inst.PrivateIp,
-                          `${inst.InstanceId}_private`
-                        )
-                      : "-"}
-                  </td>
-                  <td style={{ padding: "10px" }}>
-                    {inst.PublicIp
-                      ? renderCopyField(
-                          inst.PublicIp,
-                          `${inst.InstanceId}_public`
-                        )
-                      : "-"}
-                  </td>
-                  <td style={{ padding: "10px" }}>
-                    {inst.State === "running" &&
-                    inst.PublicIp &&
-                    inst.SSHCommand
-                      ? renderCopyField(
-                          inst.SSHCommand,
-                          `${inst.InstanceId}_ssh`
-                        )
-                      : "-"}
-                  </td>
-                  <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
-                    {!isMutedState &&
-                      isStopped &&
-                      renderButton("Start", "start", inst.InstanceId)}
-                    {!isMutedState && isRunning && (
-                      <>
-                        {renderButton("Stop", "stop", inst.InstanceId)}
-                        {renderButton("Reboot", "reboot", inst.InstanceId)}
-                      </>
-                    )}
-                  </td>
+          <div
+            style={{
+              overflowX: "auto",
+              width: "100%",
+              borderRadius: 8,
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                minWidth: 800,
+                fontSize: "0.95rem",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              <thead>
+                <tr style={{ backgroundColor: "#f1f5f9", textAlign: "left" }}>
+                  <th style={{ padding: "10px" }}>Server Name</th>
+                  <th style={{ padding: "10px" }}>State</th>
+                  <th style={{ padding: "10px" }}>Private IP</th>
+                  <th style={{ padding: "10px" }}>Public IP</th>
+                  <th style={{ padding: "10px" }}>SSH Command</th>
+                  <th style={{ padding: "10px" }}>Actions</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {instanceGroup.map((inst) => {
+                  const state = inst.State.toLowerCase();
+                  const isStopped = state === "stopped";
+                  const isRunning = state === "running";
+                  const isMutedState = ["pending", "starting"].includes(state);
+                  const isBusyState = [
+                    "pending",
+                    "starting",
+                    "stopping",
+                    "rebooting",
+                  ].includes(state);
+
+                  return (
+                    <tr
+                      key={inst.InstanceId}
+                      style={{ borderTop: "1px solid #e5e7eb" }}
+                    >
+                      <td style={{ padding: "10px" }}>{inst.Name}</td>
+                      <td
+                        style={{
+                          padding: "10px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        {inst.State}
+                        {isBusyState && (
+                          <Loader2
+                            size={14}
+                            className="animate-spin text-gray-500"
+                          />
+                        )}
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        {inst.PrivateIp
+                          ? renderCopyField(
+                            inst.PrivateIp,
+                            `${inst.InstanceId}_private`
+                          )
+                          : "-"}
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        {inst.PublicIp
+                          ? renderCopyField(
+                            inst.PublicIp,
+                            `${inst.InstanceId}_public`
+                          )
+                          : "-"}
+                      </td>
+                      <td style={{ padding: "10px" }}>
+                        {inst.State === "running" &&
+                          inst.PublicIp &&
+                          inst.SSHCommand
+                          ? renderCopyField(
+                            inst.SSHCommand,
+                            `${inst.InstanceId}_ssh`
+                          )
+                          : "-"}
+                      </td>
+                      <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                        {!isMutedState &&
+                          isStopped &&
+                          renderButton("Start", "start", inst.InstanceId)}
+                        {!isMutedState && isRunning && (
+                          <>
+                            {renderButton("Stop", "stop", inst.InstanceId)}
+                            {renderButton("Reboot", "reboot", inst.InstanceId)}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </div>
   );
+
 };
 
 export default EC2Table;
