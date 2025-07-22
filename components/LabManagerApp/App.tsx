@@ -325,48 +325,45 @@ function App(): JSX.Element {
           </div>
         ) : hasLab ? (
           <>
-            <div className="bg-[#f4f6fa] shadow-sm rounded-lg p-5 mb-6">
+            <div className="bg-[#f4f6fa] shadow-sm rounded-lg px-5 pt-3 pb-3 mb-6">
+              {/* Header Section: Welcome on left, buttons on right */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 {/* Left: Welcome Text */}
                 <div>
                   <h2 className="text-lg text-[#2c3e50] font-bold">
-                    Welcome back,{" "}
-                    <span className="text-[#007acc]">{userName}</span>
+                    Welcome back, <span className="text-[#007acc]">{userName}</span>
                   </h2>
                   <p className="text-sm text-[#34495e]">
-                    This is your personal{" "}
-                    <strong>Lab server Manager Dashboard</strong> 🚀
+                    This is your personal <strong>Lab Server Manager Dashboard</strong> 🚀
                   </p>
                 </div>
 
-                {/* Right: Refresh + Logout together */}
-                <div className="flex items-center gap-3">
+                {/* Right: Logout + Refresh */}
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => fetchUsageSummary(email)}
                     disabled={refreshing}
                     className={`p-2 rounded-full ${refreshing
                       ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-yellow-400 hover:bg-yellow-500 text-white"
-                      }`}
+                      : "bg-amber-500 hover:bg-amber-600 text-gray-700"
+                      } text-white`}
                     title="Refresh Usage"
                   >
                     <RefreshCcw
                       className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
                     />
                   </button>
-
                   <button
                     onClick={handleLogout}
-                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                    className="bg-red-500 text-white px-3 text-sm py-1 rounded hover:bg-red-600"
                   >
                     Logout
                   </button>
                 </div>
               </div>
 
-
+              {/* Usage Section */}
               <div className="w-full px-3 sm:px-4">
-                <div className="max-w-3xl mx-auto"></div>
                 {usage &&
                   Object.entries(usage).map(([serviceType, u]) => (
                     <div key={serviceType} className="w-full text-sm sm:text-sm mt-3">

@@ -8,7 +8,7 @@ import {
   CredentialResponse,
 } from "@react-oauth/google";
 import { jwtDecode } from "jwt-decode";
-import EC2Table from "./components/EC2Table";
+import EC2Table from "../LabManagerApp/components/EC2Table";
 import { SoftmaniaLogo } from "@/components/softmania-logo";
 import Link from "next/link";
 import * as CryptoJS from "crypto-js";
@@ -40,16 +40,21 @@ function App(): JSX.Element {
   const SECRET_KEY =
     process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "softmania_secret";
 
-  const [usage, setUsage] = useState<{
-    quota_hours: number;
-    used_hours: number;
-    balance_hours: number;
-    quota_days: number;
-    used_days: number;
-    balance_days: number;
-    plan_start_date?: string;
-    plan_end_date?: string;
-  } | null>(null);
+  const [usage, setUsage] = useState<
+    Record<
+      string,
+      {
+        quota_hours: number;
+        used_hours: number;
+        balance_hours: number;
+        quota_days: number;
+        used_days: number;
+        balance_days: number;
+        plan_start_date?: string;
+        plan_end_date?: string;
+      }
+    > | null
+  >(null);
 
   const [refreshing, setRefreshing] = useState(false);
   const [pemFiles, setPemFiles] = useState<{ filename: string; url: string }[]>(
@@ -68,12 +73,6 @@ function App(): JSX.Element {
       console.error("Decryption failed:", err);
       return "";
     }
-  };
-
-  const getUsernameFromEmail = (email: string): string => {
-    if (!email) return "";
-    const namePart = email.split("@")[0];
-    return namePart.charAt(0).toUpperCase() + namePart.slice(1);
   };
 
   const formatFloatHours = (hours: number): string => {
@@ -109,17 +108,24 @@ function App(): JSX.Element {
       if (!res.ok) throw new Error("Usage fetch failed");
 
       const data = await res.json();
+      const summaries = data.UsageSummary || [];
 
-      setUsage({
-        quota_hours: data.QuotaHours || 0,
-        used_hours: data.ConsumedHours || 0,
-        balance_hours: data.BalanceHours || 0,
-        quota_days: data.QuotaExpiryDays || 0,
-        used_days: data.ConsumedDays || 0,
-        balance_days: data.BalanceDays || 0,
-        plan_start_date: data.PlanStartDate || "",
-        plan_end_date: data.PlanEndDate || "",
+      const formatted: Record<string, any> = {};
+      summaries.forEach((summary: any) => {
+        const type = summary.ServiceType;
+        formatted[type] = {
+          quota_hours: summary.QuotaHours || 0,
+          used_hours: summary.ConsumedHours || 0,
+          balance_hours: summary.BalanceHours || 0,
+          quota_days: summary.QuotaExpiryDays || 0,
+          used_days: summary.ConsumedDays || 0,
+          balance_days: summary.BalanceDays || 0,
+          plan_start_date: summary.PlanStartDate || "",
+          plan_end_date: summary.PlanEndDate || "",
+        };
       });
+
+      setUsage(formatted);
     } catch (err) {
       console.error("Error fetching usage summary:", err);
     } finally {
@@ -163,29 +169,19 @@ function App(): JSX.Element {
       const decoded: any = jwtDecode(credentialResponse.credential);
       const userEmail = decoded.email;
       const fullName = decoded.name;
-      const loginTime = new Date().getTime();
 
+      // Save in localStorage (your original code)
       localStorage.setItem("userEmail", encrypt(userEmail));
       localStorage.setItem("userName", encrypt(fullName));
-      localStorage.setItem("loginTime", encrypt(loginTime.toString()));
+      localStorage.setItem("loginTime", encrypt(Date.now().toString()));
 
       setEmail(userEmail);
       setUserName(fullName);
 
-      // Optional: keep your old backend log
-      await fetch(`${API_URL}/log-user-login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: userEmail,
-          name: fullName,
-          login_time: new Date().toISOString(),
-        }),
-      });
-
-      // ✅ Splunk + GA4 unified logging
+      // ✅ Send log to Splunk + GA4 for Google login
       try {
-        const ip = await getClientIp();
+        const ip = await getClientIp(); // same logic you used in page.tsx
+
         const payload = {
           ip,
           action: "google_login",
@@ -198,14 +194,16 @@ function App(): JSX.Element {
           timestamp: new Date().toISOString(),
         };
 
-        // Splunk
+        // ✅ Send to Splunk (no change)
         await fetch("/api/log", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(payload),
         });
 
-        // GA4
+        // ✅ Send to GA4 (new)
         if (
           typeof window !== "undefined" &&
           typeof window.gtag === "function"
@@ -213,12 +211,13 @@ function App(): JSX.Element {
           window.gtag("event", "google_login", payload);
           console.log("[GA4] Event: google_login", payload);
 
-          // Count logins
+          // Count logins per user in localStorage
           const loginKey = `google_login_count_${userEmail}`;
           const currentCount =
             parseInt(localStorage.getItem(loginKey) || "0", 10) + 1;
           localStorage.setItem(loginKey, currentCount.toString());
 
+          // Set user ID and user property
           window.gtag("config", process.env.G_TAG, {
             user_id: userEmail,
           });
@@ -300,6 +299,7 @@ function App(): JSX.Element {
 
   return (
     <GoogleOAuthProvider clientId={CLIENT_ID}>
+
       <div style={{ padding: 20 }}>
         {!email ? (
           <div className="flex flex-col items-center justify-center mt-16">
@@ -317,157 +317,107 @@ function App(): JSX.Element {
           </div>
         ) : hasLab ? (
           <>
-            <div className="bg-[#f4f6fa] shadow-sm rounded-lg pr-3 pl-3 pb-3 mb-6">
-              <div className="flex justify-end mt-2">
-                <button
-                  onClick={handleLogout}
-                  className="mt-4 sm:mt-0 bg-red-500 text-white px-2 text-sm py-1 rounded hover:bg-red-600"
-                >
-                  Logout
-                </button>
-              </div>
-
-              {usage && (
-                <div className="w-full text-sm mt-4">
-                  {(usage.balance_hours <= 0 || usage.balance_days <= 0) && (
-                    <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md px-4 py-2 mb-3">
-                      ⚠️ <strong>Your purchased quota has finished.</strong>{" "}
-                      Your instance will be terminated soon.
-                    </div>
-                  )}
-
-                  {/* Desktop View */}
-                  <div
-                    className={`hidden sm:flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg px-4 py-3 ${
-                      usage.balance_hours <= 0 || usage.balance_days <= 0
-                        ? "bg-red-50 border border-red-200 text-red-800"
-                        : "bg-green-50 border border-green-200 text-gray-800"
-                    }`}
-                  >
-                    <span>
-                      <strong>Quota Hours:</strong>{" "}
-                      {formatFloatHours(usage.quota_hours)} hrs
-                    </span>
-                    <span>
-                      <strong>Used Hours:</strong>{" "}
-                      {formatFloatHours(usage.used_hours)} hrs
-                    </span>
-                    <span>
-                      <strong>Balance Hours:</strong>{" "}
-                      {formatFloatHours(usage.balance_hours)} hrs
-                    </span>
-                    <span className="mx-2 text-gray-400">|</span>
-                    <span>
-                      <strong>Validity:</strong> {usage.quota_days} days
-                    </span>
-                    <span>
-                      <strong>Plan Start Date:</strong>{" "}
-                      {usage.plan_start_date || "N/A"}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <strong>Plan End Date:</strong>{" "}
-                      {usage.plan_end_date || "N/A"}
-                      <span className="text-red-500">
-                        (will be terminated on this date.)
-                      </span>
-                      <button
-                        onClick={() => fetchUsageSummary(email)}
-                        disabled={refreshing}
-                        className={`p-2 rounded-full ${
-                          refreshing
-                            ? "bg-gray-400 cursor-not-allowed"
-                            : "bg-amber-500 hover:bg-amber-600 text-gray-700"
-                        } text-white`}
-                        title="Refresh"
-                      >
-                        <RefreshCcw
-                          className={`w-4 h-4 ${
-                            refreshing ? "animate-spin" : ""
-                          }`}
-                        />
-                      </button>
-                    </span>
-                  </div>
-
-                  {/* Mobile View */}
-                  <div
-                    className={`sm:hidden flex flex-col gap-3 rounded-lg px-4 py-3 ${
-                      usage.balance_hours <= 0 || usage.balance_days <= 0
-                        ? "bg-red-50 border border-red-200 text-red-800"
-                        : "bg-green-50 border border-green-200 text-gray-800"
-                    }`}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <p>
-                        <strong>Quota Days:</strong> {usage.quota_days} days
-                      </p>
-                      <p>
-                        <strong>Used Days:</strong> {usage.used_days.toFixed(1)}{" "}
-                        days
-                      </p>
-                      <p>
-                        <strong>Balance Days:</strong>{" "}
-                        {usage.balance_days.toFixed(1)} days
-                      </p>
-                      <p>
-                        <strong>Plan Start Date:</strong>{" "}
-                        {usage.plan_start_date || "N/A"}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <p>
-                          <strong>Plan End Date:</strong>{" "}
-                          {usage.plan_end_date || "N/A"}{" "}
-                          <span className="text-gray-500">
-                            (will be terminated on this date.)
-                          </span>
-                        </p>
-                        <button
-                          onClick={() => fetchUsageSummary(email)}
-                          disabled={refreshing}
-                          className={`p-2 rounded-full ${
-                            refreshing
-                              ? "bg-gray-400 cursor-not-allowed"
-                              : "bg-gray-200 hover:bg-gray-300 text-gray-700"
-                          } text-white`}
-                          title="Refresh"
-                        >
-                          <RefreshCcw
-                            className={`w-4 h-4 ${
-                              refreshing ? "animate-spin" : ""
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 pt-2 border-t border-current">
-                      <p>
-                        <strong>Quota Hours:</strong>{" "}
-                        {formatFloatHours(usage.quota_hours)} hrs
-                      </p>
-                      <p>
-                        <strong>Used Hours:</strong>{" "}
-                        {formatFloatHours(usage.used_hours)} hrs
-                      </p>
-                      <p>
-                        <strong>Balance Hours:</strong>{" "}
-                        {formatFloatHours(usage.balance_hours)} hrs
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="mt-3 text-sm text-gray-600">
-                    If you are facing any issues accessing your lab server,
-                    please reach out to{" "}
-                    <a
-                      href="mailto:labsupport@softmania.in"
-                      className="text-blue-600 underline"
-                    >
-                      labsupport@softmania.in
-                    </a>
-                    .
+            <div className="bg-[#f4f6fa] shadow-sm rounded-lg px-5 pt-3 pb-3 mb-6">
+              {/* Header Section: Welcome on left, buttons on right */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                {/* Left: Welcome Text */}
+                <div>
+                  <h2 className="text-lg text-[#2c3e50] font-bold">
+                    Welcome back, <span className="text-[#007acc]">{userName}</span>
+                  </h2>
+                  <p className="text-sm text-[#34495e]">
+                    This is your personal <strong>Lab Server Manager Dashboard</strong> 🚀
                   </p>
                 </div>
-              )}
+
+                {/* Right: Logout + Refresh */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fetchUsageSummary(email)}
+                    disabled={refreshing}
+                    className={`p-2 rounded-full ${refreshing
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-amber-500 hover:bg-amber-600 text-gray-700"
+                      } text-white`}
+                    title="Refresh Usage"
+                  >
+                    <RefreshCcw
+                      className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+                    />
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="bg-red-500 text-white px-3 text-sm py-1 rounded hover:bg-red-600"
+                  >
+                    Logout
+                  </button>
+                </div>
+              </div>
+
+              {/* Usage Section */}
+              <div className="w-full px-3 sm:px-4">
+                {usage &&
+                  Object.entries(usage).map(([serviceType, u]) => (
+                    <div key={serviceType} className="w-full text-sm sm:text-sm mt-3">
+                      <h3 className="text-sm font-semibold text-gray-800 mb-1">
+                        {serviceType} Usage
+                      </h3>
+
+                      {(u.balance_hours <= 0 || u.balance_days <= 0) && (
+                        <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-3 py-1 mb-2">
+                          ⚠️ <strong>Quota exhausted.</strong> Instance will be terminated soon.
+                        </div>
+                      )}
+
+                      {/* Desktop View */}
+                      <div
+                        className={`hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 rounded px-3 py-2 ${u.balance_hours <= 0 || u.balance_days <= 0
+                          ? "bg-red-50 border border-red-200 text-red-800"
+                          : "bg-green-50 border border-green-200 text-gray-800"
+                          }`}
+                      >
+                        <span><strong>Quota:</strong> {formatFloatHours(u.quota_hours)} hrs</span>
+                        <span><strong>Used:</strong> {formatFloatHours(u.used_hours)} hrs</span>
+                        <span><strong>Left:</strong> {formatFloatHours(u.balance_hours)} hrs</span>
+                        <span className="text-gray-400">|</span>
+                        <span><strong>Valid:</strong> {u.quota_days} days</span>
+                        <span><strong>Start:</strong> {u.plan_start_date || "N/A"}</span>
+                        <span className="flex items-center gap-2">
+                          <strong>End:</strong> {u.plan_end_date || "N/A"}
+                          <span className="text-red-500">(terminate)</span>
+                        </span>
+                      </div>
+
+                      {/* Mobile View */}
+                      <div
+                        className={`sm:hidden flex flex-col gap-1 rounded px-3 py-2 ${u.balance_hours <= 0 || u.balance_days <= 0
+                          ? "bg-red-50 border border-red-200 text-red-800"
+                          : "bg-green-50 border border-green-200 text-gray-800"
+                          }`}
+                      >
+                        <p><strong>Quota:</strong> {formatFloatHours(u.quota_hours)} hrs</p>
+                        <p><strong>Used:</strong> {formatFloatHours(u.used_hours)} hrs</p>
+                        <p><strong>Left:</strong> {formatFloatHours(u.balance_hours)} hrs</p>
+                        <p><strong>Valid:</strong> {u.quota_days} days</p>
+                        <p><strong>Start:</strong> {u.plan_start_date || "N/A"}</p>
+                        <p className="flex items-center gap-2">
+                          <strong>End:</strong> {u.plan_end_date || "N/A"}
+                          <span className="text-red-500">(terminate)</span>
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+
+                <p className="mt-3 text-sm text-gray-500">
+                  Trouble accessing your server? Email{" "}
+                  <a
+                    href="mailto:labsupport@softmania.in"
+                    className="text-blue-600 underline"
+                  >
+                    labsupport@softmania.in
+                  </a>.
+                </p>
+              </div>
             </div>
 
             <EC2Table
@@ -494,6 +444,27 @@ function App(): JSX.Element {
                       <a
                         href={file.url}
                         download={file.filename}
+                        onClick={async () => {
+                          const ip = await getClientIp();
+                          await fetch("/api/log", {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                              ip,
+                              action: "pem_download",
+                              session: email,
+                              browser: navigator.userAgent,
+                              event: "pem_download",
+                              extra: {
+                                file: file.filename,
+                                email,
+                                timestamp: new Date().toISOString(),
+                              },
+                            }),
+                          });
+                        }}
                         className="text-green-600 hover:text-green-800 flex items-center gap-2"
                       >
                         <span className="hidden sm:inline">Download</span>
@@ -535,35 +506,35 @@ function App(): JSX.Element {
           </div>
         )}
       </div>
-
-      {showLogoutModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-xl shadow-lg p-6 w-[90%] max-w-md">
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">
-              Confirm Logout
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to logout from your Lab Manager Dashboard?
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={cancelLogout}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmLogout}
-                className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
-              >
-                Logout
-              </button>
+      {
+        showLogoutModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-lg p-6 w-[90%] max-w-md">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                Confirm Logout
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to logout from your Lab Manager Dashboard?
+              </p>
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={cancelLogout}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmLogout}
+                  className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </GoogleOAuthProvider>
+        )
+      }
+    </GoogleOAuthProvider >
   );
 }
-
 export default App;
