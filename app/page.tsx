@@ -85,7 +85,7 @@ interface SelectedPackageDetails {
   hours: number
   paymentLink: string
   components?: string[]
-  envTitle: string
+  envTitle?: string
 }
 
 export default function LabEnvironments() {
@@ -151,6 +151,20 @@ export default function LabEnvironments() {
       window.removeEventListener("beforeunload", handleBeforeUnload)
     }
   }, [])
+
+  const toggleFeatures = (envId: string) => {
+    setExpandedFeatures((prev) => ({
+      ...prev,
+      [envId]: !prev[envId],
+    }))
+  }
+
+  const toggleInfo = (envId: string) => {
+    setExpandedInfo((prev) => ({
+      ...prev,
+      [envId]: !prev[envId],
+    }))
+  }
 
   const handlePackageSelect = (env: EnvironmentOption, option: (typeof env.pricing)[0]) => {
     const planSessionId = `PLAN-${Math.random().toString(36).substring(2, 10)}`
@@ -307,7 +321,6 @@ export default function LabEnvironments() {
           })
         }}
       />
-
 
       <LabHero />
 
