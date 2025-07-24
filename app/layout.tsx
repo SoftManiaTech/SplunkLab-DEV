@@ -3,7 +3,7 @@ import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { Metadata } from "next";
 import SmoothScrollProvider from "@/components/SmoothScrollProvider";
-import { GA_TRACKING_ID } from "@/lib/gtag"; // ✅ use correct GA ID from lib
+import GAClientScript from "@/components/GAClientScript"; // ✅ correct GA loader
 
 const inter = Inter({
   subsets: ["latin"],
@@ -72,25 +72,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
-      <head>
-        {/* ✅ Google Analytics with Correct ID */}
-        <script
-          async
-          src={`https://www.googletagmanager.com/gtag/js?id=${GA_TRACKING_ID}`}
-        ></script>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${GA_TRACKING_ID}', {
-                page_path: window.location.pathname,
-              });
-            `,
-          }}
-        />
-      </head>
+      <head>{/* GA script moved to client */}</head>
       <body className={`${inter.className} antialiased`}>
         <SmoothScrollProvider>{children}</SmoothScrollProvider>
         {/* Version Label */}
