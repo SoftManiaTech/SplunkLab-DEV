@@ -16,6 +16,9 @@ import {
   ChevronUp,
   ShieldCheck,
   FileText,
+  MessageSquare,
+  Terminal,
+  Users,
 } from "lucide-react"
 
 interface EnvironmentOption {
@@ -74,7 +77,10 @@ const pricingCategories: PricingCategory[] = [
           { amount: 200, hours: 14, paymentLink: "https://pages.razorpay.com/Splunk-SE-200" },
           { amount: 300, hours: 23, paymentLink: "https://pages.razorpay.com/Splunk-SE-300" },
           { amount: 400, hours: 31, paymentLink: "https://pages.razorpay.com/Splunk-SE-400" },
-          { amount: 500, hours: 40, paymentLink: "https://pages.razorpay.com/Splunk-SE-500" },
+          { amount: 500, hours: 40, paymentLink: "https://pages.razorpay.com/Splunk-SE-500", popular: true },
+          { amount: 600, hours: 48, paymentLink: "https://pages.razorpay.com/Splunk-SE-600" },
+          { amount: 700, hours: 56, paymentLink: "https://pages.razorpay.com/Splunk-SE-700" },
+
         ],
         redirectUrl: "https://softmania.com/splunk-standalone-lab",
         color: "text-green-600",
@@ -105,6 +111,10 @@ const pricingCategories: PricingCategory[] = [
           { amount: 500, hours: 10, paymentLink: "https://pages.razorpay.com/Splunk-DNC-500" },
           { amount: 1000, hours: 21, paymentLink: "https://pages.razorpay.com/Splunk-DNC-1000", popular: true },
           { amount: 1500, hours: 31, paymentLink: "https://pages.razorpay.com/Splunk-DNC-1500" },
+          { amount: 2000, hours: 42, paymentLink: "https://pages.razorpay.com/Splunk-DNC-2000" },
+          { amount: 2500, hours: 52, paymentLink: "https://pages.razorpay.com/Splunk-DNC-2500" },
+          { amount: 2800, hours: 58, paymentLink: "https://pages.razorpay.com/Splunk-DNC-2800" },
+
         ],
         redirectUrl: "https://softmania.com/splunk-distributed-lab",
         color: "text-emerald-600",
@@ -137,6 +147,7 @@ const pricingCategories: PricingCategory[] = [
           { amount: 3000, hours: 28, paymentLink: "https://pages.razorpay.com/Splunk-DC-3000", popular: true },
           { amount: 4000, hours: 38, paymentLink: "https://pages.razorpay.com/Splunk-DC-4000" },
           { amount: 5000, hours: 47, paymentLink: "https://pages.razorpay.com/Splunk-DC-5000" },
+          { amount: 6000, hours: 56, paymentLink: "https://pages.razorpay.com/Splunk-DC-6000" },
         ],
         redirectUrl: "https://softmania.com/splunk-cluster-lab",
         color: "text-purple-600",
@@ -150,52 +161,113 @@ const pricingCategories: PricingCategory[] = [
     description: "Explore various security data sources for your Splunk use cases.",
     environments: [
       {
-        id: "windows-event-logs",
-        title: "Windows Event Logs",
-        subtitle: "Comprehensive Windows Monitoring",
-        icon: <FileText className="w-6 h-6" />,
-        description: "Collect and analyze critical Windows event logs for security monitoring and incident response.",
-        features: [
-          "Security Event Logs (4624, 4625, etc.)",
-          "System Event Logs",
-          "Application Event Logs",
-          "Forwarded Events",
-        ],
+        id: "windows-ad-dns",
+        title: "Windows (AD & DNS)",
+        subtitle: "Active Directory & DNS Security",
+        icon: <Users className="w-6 h-6" />,
+        description:
+          "Monitor Active Directory and DNS server logs for authentication, authorization, and network resolution activities.",
+        features: ["Active Directory audit logs", "DNS query logs", "Group policy changes", "User logon/logoff events"],
         info: [
-          "Requires Windows Server/Client",
+          "Requires Windows Server (Domain Controller, DNS Server)",
           "Supports WinEventLog input in Splunk",
-          "Recommended for endpoint security",
+          "Essential for identity and network security",
         ],
-        components: ["Windows OS", "Universal Forwarder"],
+        components: ["Windows Server (DC)", "DNS Server", "Universal Forwarder"],
         pricing: [
-          { amount: 120, hours: 8, paymentLink: "https://pages.razorpay.com/WinLogs-DS-120" },
-          { amount: 250, hours: 18, paymentLink: "https://pages.razorpay.com/WinLogs-DS-250" },
+          { amount: 160, hours: 12, paymentLink: "https://pages.razorpay.com/WinADDNS-DS-160" },
+          { amount: 330, hours: 24, paymentLink: "https://pages.razorpay.com/WinADDNS-DS-330" },
         ],
-        redirectUrl: "https://softmania.com/windows-event-logs",
-        color: "text-blue-600",
-        bgColor: "bg-blue-50 dark:bg-blue-950/50",
+        redirectUrl: "https://softmania.com/windows-ad-dns-logs",
+        color: "text-indigo-600",
+        bgColor: "bg-indigo-50 dark:bg-indigo-950/50",
       },
       {
-        id: "linux-syslogs",
-        title: "Linux Syslogs",
-        subtitle: "Linux Server Monitoring",
-        icon: <ShieldCheck className="w-6 h-6" />,
-        description: "Ingest and analyze Linux system logs for security, performance, and operational insights.",
-        features: ["Auth logs (SSH, sudo)", "Kernel logs", "Cron job logs", "Package manager logs"],
-        info: [
-          "Compatible with various Linux distributions",
-          "Supports syslog input in Splunk",
-          "Essential for server security",
-        ],
-        components: ["Linux OS", "Universal Forwarder"],
+        id: "linux-data-sources",
+        title: "Linux",
+        subtitle: "Comprehensive Linux Monitoring",
+        icon: <Terminal className="w-6 h-6" />,
+        description: "Collect various Linux data beyond just syslogs, including audit logs, process data, and more.",
+        features: ["Audit logs", "Process monitoring", "File integrity monitoring", "Performance metrics"],
+        info: ["Requires Linux OS", "Supports various Splunk inputs", "Crucial for host-based security"],
+        components: ["Linux OS", "Universal Forwarder", "Auditd"],
         pricing: [
-          { amount: 110, hours: 7, paymentLink: "https://pages.razorpay.com/LinuxLogs-DS-110" },
-          { amount: 230, hours: 16, paymentLink: "https://pages.razorpay.com/LinuxLogs-DS-230" },
+          { amount: 130, hours: 9, paymentLink: "https://pages.razorpay.com/LinuxData-DS-130" },
+          { amount: 270, hours: 19, paymentLink: "https://pages.razorpay.com/LinuxData-DS-270" },
         ],
-        redirectUrl: "https://softmania.com/linux-syslogs",
-        color: "text-orange-600",
-        bgColor: "bg-orange-50 dark:bg-orange-950/50",
+        redirectUrl: "https://softmania.com/linux-data-sources",
+        color: "text-purple-600",
+        bgColor: "bg-purple-50 dark:bg-purple-950/50",
       },
+      {
+        id: "syslog-ng",
+        title: "Syslog-ng",
+        subtitle: "Advanced Syslog Collection",
+        icon: <MessageSquare className="w-6 h-6" />,
+        description: "Collect and analyze logs from Syslog-ng for robust and flexible log management.",
+        features: [
+          "Syslog-ng is installed and configured on a Linux host",
+          "Logs are forwarded to a Splunk indexer via TCP (port 9997)",
+          "Custom templates are used to format the logs for ingestion",
+        ],
+        info: [
+          "(OS: Red Hat-9) (RAM: 4 GB) (vCPUs: 2)",
+          "Storage: 30GB",
+          "Enabled ports: 22, 80, 443, 514, 5514",
+          "Dynamic Public IP",
+        ],
+        components: [
+          "Syslog-ng Server",
+        ],
+        pricing: [
+          { amount: 130, hours: 9, paymentLink: "https://pages.razorpay.com/SyslogNG-DS-130" },
+          { amount: 270, hours: 19, paymentLink: "https://pages.razorpay.com/SyslogNG-DS-270" },
+        ],
+        redirectUrl: "https://softmania.com/syslog-ng-data-source",
+        color: "text-cyan-600",
+        bgColor: "bg-cyan-50 dark:bg-cyan-950/50",
+      },
+      {
+        id: "mysql-logs",
+        title: "MySQL Database",
+        subtitle: "Database Activity Monitoring",
+        icon: <Database className="w-6 h-6" />,
+        description:
+          "Monitor MySQL database activity, including queries, errors, and audit trails for security and performance.",
+        features: ["General query logs", "Error logs", "Slow query logs", "Audit logs (if enabled)"],
+        info: ["Requires MySQL server", "Supports database inputs/scripts in Splunk", "Important for data security"],
+        components: ["MySQL Server", "Universal Forwarder"],
+        pricing: [
+          { amount: 140, hours: 10, paymentLink: "https://pages.razorpay.com/MySQL-DS-140" },
+          { amount: 290, hours: 20, paymentLink: "https://pages.razorpay.com/MySQL-DS-290" },
+        ],
+        redirectUrl: "https://softmania.com/mysql-logs",
+        color: "text-yellow-600",
+        bgColor: "bg-yellow-50 dark:bg-yellow-950/50",
+      },
+      {
+        id: "mssql-logs",
+        title: "MSSQL Database",
+        subtitle: "SQL Server Monitoring",
+        icon: <Database className="w-6 h-6" />,
+        description:
+          "Collect and analyze logs from Microsoft SQL Server for security, compliance, and performance insights.",
+        features: ["SQL Server audit logs", "Error logs", "SQL Agent logs", "Trace logs"],
+        info: [
+          "Requires MSSQL Server",
+          "Supports database inputs/scripts in Splunk",
+          "Critical for enterprise databases",
+        ],
+        components: ["MSSQL Server", "Universal Forwarder"],
+        pricing: [
+          { amount: 150, hours: 11, paymentLink: "https://pages.razorpay.com/MSSQL-DS-150" },
+          { amount: 310, hours: 22, paymentLink: "https://pages.razorpay.com/MSSQL-DS-310" },
+        ],
+        redirectUrl: "https://softmania.com/mssql-logs",
+        color: "text-red-600",
+        bgColor: "bg-red-50 dark:bg-red-950/50",
+      },
+
     ],
   },
 ]
@@ -239,7 +311,7 @@ export function LabPricingModels({ onPackageSelect, selectedPricing }: LabPricin
                 category.environments.map((env) => (
                   <Card
                     key={env.id}
-                    className="border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] group"
+                    className="border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] group hover:border-green-500"
                   >
                     <CardHeader className="p-6">
                       <div className="flex items-start gap-4 mb-4">
@@ -357,13 +429,12 @@ export function LabPricingModels({ onPackageSelect, selectedPricing }: LabPricin
                               key={index}
                               onClick={() => onPackageSelect(env, option)}
                               className={`relative p-4 rounded-2xl border text-center cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02]
-    ${
-      selectedPricing[env.id]?.amount === option.amount
-        ? "border-green-500 bg-green-50 dark:bg-green-950/50 ring-1 ring-green-200 dark:ring-green-800 shadow-md"
-        : option.popular
-          ? "border-green-500 bg-green-50 dark:bg-green-950/50 shadow-sm"
-          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
-    }`}
+${selectedPricing[env.id]?.amount === option.amount
+                                  ? "border-green-500 bg-green-50 dark:bg-green-950/50 ring-1 ring-green-200 dark:ring-green-800 shadow-md"
+                                  : option.popular
+                                    ? "border-green-500 bg-green-50 dark:bg-green-950/50 shadow-sm"
+                                    : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
+                                }`}
                             >
                               {/* Selected Badge */}
                               {selectedPricing[env.id]?.amount === option.amount && (
