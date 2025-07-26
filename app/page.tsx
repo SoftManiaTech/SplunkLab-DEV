@@ -15,7 +15,7 @@ import { LabHero } from "@/components/lab-hero"
 import { LabPricingModels, type EnvironmentOption } from "@/components/lab-pricing-models"
 import { event } from "@/lib/gtag"
 import { event as sendToGA4 } from "@/lib/gtag"
-import { LaunchSoonBanner } from "@/components/launch-soon-banner"
+import { RazorpayCheckout } from "@/components/razorpay-checkout"
 // Splunk Logging Integration
 const getClientIp = async () => {
   try {
@@ -86,6 +86,7 @@ interface SelectedPackageDetails {
   paymentLink: string
   components?: string[]
   envTitle?: string
+  envId?: string // Add this line
 }
 
 export default function LabEnvironments() {
@@ -102,6 +103,7 @@ export default function LabEnvironments() {
   // ✅ Correctly persistent session ID across reloads
   const sessionId = useRef("")
   const sessionStart = useRef(performance.now())
+  const [showRazorpayCheckout, setShowRazorpayCheckout] = useState(false)
 
   useEffect(() => {
     const existingSession = sessionStorage.getItem("lab-session-id")
@@ -186,6 +188,7 @@ export default function LabEnvironments() {
       paymentLink: option.paymentLink,
       components: env.components,
       envTitle: env.title,
+      envId: env.id, // Add this line
     })
 
     event({
@@ -208,7 +211,6 @@ export default function LabEnvironments() {
       sessionId: sessionId.current,
       action: "user_clicked_payment",
       title: "User clicked payment",
-
       details: {
         package: selectedPackageDetails?.envTitle,
         amount: selectedPackageDetails?.amount,
@@ -216,10 +218,80 @@ export default function LabEnvironments() {
       },
     })
 
-    if (selectedPackageDetails?.paymentLink) {
-      window.location.href = selectedPackageDetails.paymentLink
-      setShowConfirmationModal(false)
+    // Close confirmation modal and open Razorpay checkout
+    setShowConfirmationModal(false)
+    setShowRazorpayCheckout(true)
+  }
+
+  const handleRazorpaySuccess = async (response: any) => {
+    try {
+      // Verify payment on server - Update the API endpoint
+      const verifyResponse = await fetch("/api/razorpay/verify-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+        }),
+      })
+
+      if (verifyResponse.ok) {
+        sendLogToSplunk({
+          sessionId: sessionId.current,
+          action: "payment_success_razorpay",
+          title: "Razorpay payment success",
+          details: {
+            payment_id: response.razorpay_payment_id,
+            order_id: response.razorpay_order_id,
+            userDetails: response.userDetails,
+          },
+        })
+
+        setShowRazorpayCheckout(false)
+        setShowSuccessPopup(true)
+
+        event({
+          action: "payment_success",
+          params: {
+            source: "LabEnvironments",
+            payment_method: "razorpay",
+            payment_id: response.razorpay_payment_id,
+          },
+        })
+      } else {
+        throw new Error("Payment verification failed")
+      }
+    } catch (error) {
+      console.error("Payment verification error:", error)
+      handleRazorpayError({ description: "Payment verification failed" })
     }
+  }
+
+  const handleRazorpayError = (error: any) => {
+    sendLogToSplunk({
+      sessionId: sessionId.current,
+      action: "payment_failure_razorpay",
+      title: "Razorpay payment failure",
+      details: {
+        error: error.description || "Payment failed",
+      },
+    })
+
+    setShowRazorpayCheckout(false)
+
+    event({
+      action: "payment_failure",
+      params: {
+        source: "LabEnvironments",
+        payment_method: "razorpay",
+        error: error.description,
+      },
+    })
+
+    alert("Payment failed. Please try again.")
   }
 
   //  Added Visit vs Reload Tracking Here
@@ -477,6 +549,17 @@ export default function LabEnvironments() {
 
       <LabFooter />
       <Salesiq />
+      <RazorpayCheckout
+        isOpen={showRazorpayCheckout}
+        onClose={() => setShowRazorpayCheckout(false)}
+        amount={selectedPackageDetails?.amount || 0}
+        packageDetails={{
+          envTitle: selectedPackageDetails?.envTitle,
+          envId: selectedPackageDetails?.envId || "",
+        }}
+        onSuccess={handleRazorpaySuccess}
+        onError={handleRazorpayError}
+      />
 
       {showSuccessPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">

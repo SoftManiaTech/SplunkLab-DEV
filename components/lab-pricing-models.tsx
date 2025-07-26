@@ -73,7 +73,7 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["Splunk Enterprise"],
         pricing: [
-          { amount: 100, hours: 6, paymentLink: "https://pages.razorpay.com/Splunk-SE-100" },
+          { amount: 1, hours: 6, paymentLink: "https://pages.razorpay.com/Splunk-SE-100" },
           { amount: 200, hours: 14, paymentLink: "https://pages.razorpay.com/Splunk-SE-200" },
           { amount: 300, hours: 23, paymentLink: "https://pages.razorpay.com/Splunk-SE-300" },
           { amount: 400, hours: 31, paymentLink: "https://pages.razorpay.com/Splunk-SE-400" },
