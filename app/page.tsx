@@ -359,22 +359,6 @@ export default function LabEnvironments() {
     }
   }, [showSuccessPopup])
 
-  useEffect(() => {
-    const threshold = 160
-    const checkDevTools = () => {
-      if (window.outerHeight - window.innerHeight > threshold) {
-        sendLogToSplunk({
-          sessionId: sessionId.current,
-          action: "devtools_detected",
-          title: "DevTools Detected",
-        })
-        window.location.href = "https://splunklab.softmania.in/blocked"
-      }
-    }
-
-    window.addEventListener("resize", checkDevTools)
-    return () => window.removeEventListener("resize", checkDevTools)
-  }, [])
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
