@@ -14,8 +14,6 @@ import {
   ArrowUpRightFromSquare,
   ChevronDown,
   ChevronUp,
-  ShieldCheck,
-  FileText,
   MessageSquare,
   Terminal,
   Users,
