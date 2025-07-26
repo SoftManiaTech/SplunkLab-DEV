@@ -7,7 +7,7 @@ import Salesiq from "@/components/salesiq"
 import { LabHeader } from "@/components/lab-header"
 import { LabFAQ } from "@/components/lab-faq"
 import { LabFooter } from "@/components/lab-footer"
-import { ContactModal } from "@/components/contact-modal"
+import { ContactModal } from "@/components/contact-modal";
 import { Server, Info } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
@@ -363,22 +363,6 @@ export default function LabEnvironments() {
     }
   }, [showSuccessPopup])
 
-  useEffect(() => {
-    const threshold = 160
-    const checkDevTools = () => {
-      if (window.outerHeight - window.innerHeight > threshold) {
-        sendLogToSplunk({
-          sessionId: sessionId.current,
-          action: "devtools_detected",
-          title: "DevTools Detected",
-        })
-        window.location.href = "https://splunklab.softmania.in/blocked"
-      }
-    }
-
-    window.addEventListener("resize", checkDevTools)
-    return () => window.removeEventListener("resize", checkDevTools)
-  }, [])
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">

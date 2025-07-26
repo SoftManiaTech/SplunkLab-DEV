@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
       amount: amount * 100, // Amount in paise
       currency,
       receipt: `receipt_${Date.now()}`,
+      payment_capture: true, // ✅ Enable auto-capture
     })
 
     return NextResponse.json(order)

@@ -1,6 +1,11 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, X } from "lucide-react"
 
 interface RazorpayOptions {
   key: string
@@ -54,6 +59,14 @@ export function RazorpayCheckout({
   onSuccess,
   onError,
 }: RazorpayCheckoutProps) {
+  const [userName, setUserName] = useState("")
+  const [userEmail, setUserEmail] = useState("")
+  const [userPhone, setUserPhone] = useState("")
+  const [splunkInstall, setSplunkInstall] = useState<"yes" | "no" | "">("")
+  const [botsv3Dataset, setBotsv3Dataset] = useState<"yes" | "no" | "">("")
+  const [loading, setLoading] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+
   const getEnvironmentName = (envId: string, amount: number): string => {
     switch (envId) {
       case "standalone":
@@ -81,157 +94,101 @@ export function RazorpayCheckout({
     return ["standalone", "distributed", "clustered"].includes(envId)
   }
 
+  const environmentName = getEnvironmentName(packageDetails.envId, amount)
+  const splunkPackage = isSplunkPackage(packageDetails.envId)
+
+  // Lock body scroll when modal is open
   useEffect(() => {
-    if (!isOpen) return
+    if (isOpen) {
+      // Store original overflow
+      const originalOverflow = document.body.style.overflow
+      const originalPaddingRight = document.body.style.paddingRight
 
-    // Load Razorpay script
-    const script = document.createElement("script")
-    script.src = "https://checkout.razorpay.com/v1/checkout.js"
-    script.async = true
-    script.onload = () => {
-      openRazorpayCheckout()
-    }
-    document.body.appendChild(script)
+      // Lock body scroll
+      document.body.style.overflow = "hidden"
+      document.body.style.paddingRight = "0px"
 
-    return () => {
-      document.body.removeChild(script)
+      // Prevent wheel events on body when modal is open
+      const preventBodyScroll = (e: WheelEvent) => {
+        const target = e.target as Element
+        const modalContent = document.querySelector("[data-modal-content]")
+
+        // If the scroll is happening outside the modal content, prevent it
+        if (modalContent && !modalContent.contains(target)) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }
+
+      // Prevent touch scroll on body
+      const preventTouchScroll = (e: TouchEvent) => {
+        const target = e.target as Element
+        const modalContent = document.querySelector("[data-modal-content]")
+
+        if (modalContent && !modalContent.contains(target)) {
+          e.preventDefault()
+        }
+      }
+
+      // Add event listeners
+      document.addEventListener("wheel", preventBodyScroll, { passive: false })
+      document.addEventListener("touchmove", preventTouchScroll, { passive: false })
+
+      return () => {
+        // Restore original styles
+        document.body.style.overflow = originalOverflow
+        document.body.style.paddingRight = originalPaddingRight
+
+        // Remove event listeners
+        document.removeEventListener("wheel", preventBodyScroll)
+        document.removeEventListener("touchmove", preventTouchScroll)
+      }
     }
   }, [isOpen])
 
-  const openRazorpayCheckout = () => {
-    if (!window.Razorpay) {
-      console.error("Razorpay SDK not loaded")
+  useEffect(() => {
+    // Reset form fields when dialog opens
+    if (isOpen) {
+      setUserName("")
+      setUserEmail("")
+      setUserPhone("")
+      setSplunkInstall("")
+      setBotsv3Dataset("")
+      setFormError(null)
+    }
+  }, [isOpen])
+
+  const handleProceed = async () => {
+    setFormError(null)
+    if (!userName || !userEmail || !userPhone) {
+      setFormError("Please fill in all common details.")
       return
     }
 
-    const environmentName = getEnvironmentName(packageDetails.envId, amount)
-    const splunkPackage = isSplunkPackage(packageDetails.envId)
-
-    // Create form for collecting user details
-    const formHtml = `
-      <div style="padding: 20px; font-family: Arial, sans-serif;">
-        <h3 style="margin-bottom: 20px; color: #333;">Package Details</h3>
-        
-        <!-- Common Details -->
-        <div style="margin-bottom: 15px;">
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Name *</label>
-          <input type="text" id="user-name" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Enter your full name">
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Email *</label>
-          <input type="email" id="user-email" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Enter your email">
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Phone *</label>
-          <input type="tel" id="user-phone" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Enter your phone number">
-        </div>
-
-        ${
-          splunkPackage
-            ? `
-        <!-- Splunk Specific Fields -->
-        <div style="margin-bottom: 15px;">
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Do you want Splunk to be installed? *</label>
-          <select id="splunk-install" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <option value="">Select option</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">BotsV3 data set *</label>
-          <select id="botsv3-dataset" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            <option value="">Select option</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
-        </div>
-        `
-            : ""
-        }
-
-        <!-- Environment Field -->
-        <div style="margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Environment</label>
-          <input type="text" id="environment" readonly value="${environmentName}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background-color: #f5f5f5;">
-        </div>
-
-        <div style="display: flex; gap: 10px; justify-content: flex-end;">
-          <button type="button" id="cancel-btn" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Cancel</button>
-          <button type="button" id="proceed-btn" style="padding: 10px 20px; background: #16a34a; color: white; border: none; border-radius: 4px; cursor: pointer;">Proceed to Payment</button>
-        </div>
-      </div>
-    `
-
-    // Create modal
-    const modal = document.createElement("div")
-    modal.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 10000;
-    `
-
-    const modalContent = document.createElement("div")
-    modalContent.style.cssText = `
-      background: white;
-      border-radius: 8px;
-      max-width: 500px;
-      width: 90%;
-      max-height: 90vh;
-      overflow-y: auto;
-    `
-    modalContent.innerHTML = formHtml
-
-    modal.appendChild(modalContent)
-    document.body.appendChild(modal)
-
-    // Handle form submission
-    const proceedBtn = modalContent.querySelector("#proceed-btn")
-    const cancelBtn = modalContent.querySelector("#cancel-btn")
-
-    const closeModal = () => {
-      document.body.removeChild(modal)
-      onClose()
+    if (splunkPackage && (!splunkInstall || !botsv3Dataset)) {
+      setFormError("Please fill in all Splunk-specific fields.")
+      return
     }
 
-    cancelBtn?.addEventListener("click", closeModal)
+    setLoading(true)
 
-    proceedBtn?.addEventListener("click", () => {
-      const name = (document.getElementById("user-name") as HTMLInputElement)?.value
-      const email = (document.getElementById("user-email") as HTMLInputElement)?.value
-      const phone = (document.getElementById("user-phone") as HTMLInputElement)?.value
-      const splunkInstall = splunkPackage
-        ? (document.getElementById("splunk-install") as HTMLSelectElement)?.value
-        : undefined
-      const botsv3Dataset = splunkPackage
-        ? (document.getElementById("botsv3-dataset") as HTMLSelectElement)?.value
-        : undefined
+    try {
+      // Create order on your backend
+      const orderResponse = await fetch("/api/razorpay/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount }),
+      })
 
-      // Validation
-      if (!name || !email || !phone) {
-        alert("Please fill in all required fields")
-        return
+      if (!orderResponse.ok) {
+        const errorData = await orderResponse.json()
+        throw new Error(errorData.message || "Failed to create Razorpay order.")
       }
 
-      if (splunkPackage && (!splunkInstall || !botsv3Dataset)) {
-        alert("Please fill in all Splunk-specific fields")
-        return
-      }
+      const order = await orderResponse.json()
 
-      // Close form modal
-      document.body.removeChild(modal)
-
-      // Prepare Razorpay options
       const notes: any = {
         environment: environmentName,
       }
@@ -247,10 +204,11 @@ export function RazorpayCheckout({
         currency: "INR",
         name: "Splunk Lab Environments",
         description: `${packageDetails.envTitle} - ${environmentName}`,
+        order_id: order.id, // Pass the order ID from your backend
         prefill: {
-          name: name,
-          email: email,
-          contact: phone,
+          name: userName,
+          email: userEmail,
+          contact: userPhone,
         },
         notes: notes,
         theme: {
@@ -260,18 +218,21 @@ export function RazorpayCheckout({
           onSuccess({
             ...response,
             userDetails: {
-              name,
-              email,
-              phone,
-              splunkInstall,
-              botsv3Dataset,
+              name: userName,
+              email: userEmail,
+              phone: userPhone,
+              splunk_install: splunkInstall,
+              botsv3_dataset: botsv3Dataset,
               environment: environmentName,
             },
           })
+          setLoading(false)
+          onClose() // Close the custom dialog after Razorpay opens
         },
         modal: {
           ondismiss: () => {
-            onClose()
+            setLoading(false)
+            onClose() // Close the custom dialog if Razorpay modal is dismissed
           },
         },
       }
@@ -279,10 +240,227 @@ export function RazorpayCheckout({
       const rzp = new window.Razorpay(options)
       rzp.on("payment.failed", (response: any) => {
         onError(response.error)
+        setLoading(false)
+        onClose() // Close the custom dialog if payment fails
       })
       rzp.open()
-    })
+    } catch (err: any) {
+      console.error("Error during payment process:", err)
+      setFormError(err.message || "An unexpected error occurred. Please try again.")
+      setLoading(false)
+    }
   }
 
-  return null
+  useEffect(() => {
+    if (isOpen && !window.Razorpay) {
+      const script = document.createElement("script")
+      script.src = "https://checkout.razorpay.com/v1/checkout.js"
+      script.async = true
+      script.onload = () => {
+        // Razorpay script loaded
+      }
+      document.body.appendChild(script)
+
+      return () => {
+        document.body.removeChild(script)
+      }
+    }
+  }, [isOpen])
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Premium Backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Premium Modal Container */}
+      <div
+        className="relative w-[95vw] max-w-lg mx-auto bg-gradient-to-br from-white via-white to-gray-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 max-h-[90vh] flex flex-col overflow-hidden"
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
+        {/* Premium Header with Close Button */}
+        <div className="relative bg-gradient-to-r from-green-50 to-emerald-50 dark:from-gray-800 dark:to-gray-700 p-6 pb-4 border-b border-green-100 dark:border-gray-600">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/80 dark:hover:bg-gray-600/80 transition-colors duration-200 group"
+          >
+            <X className="w-5 h-5 text-gray-500 group-hover:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-200" />
+          </button>
+
+          <div className="text-center pr-12">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-200 bg-clip-text text-transparent">
+              Enter Your Details
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mt-2">
+              Please provide your information to proceed with the payment
+            </p>
+          </div>
+        </div>
+
+        {/* Premium Scrollable Content */}
+        <div
+          data-modal-content
+          className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-green-200 scrollbar-track-transparent hover:scrollbar-thumb-green-300 p-6"
+          onWheel={(e) => {
+            // Allow scrolling within this container
+            e.stopPropagation()
+          }}
+        >
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label
+                htmlFor="name"
+                className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
+              >
+                Full Name <span className="text-red-500 ml-1">*</span>
+              </Label>
+              <Input
+                id="name"
+                placeholder="Enter your full name"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-0 focus:border-green-500 dark:focus:border-green-400 focus:shadow-lg focus:shadow-green-100 dark:focus:shadow-green-900/20 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="email"
+                className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
+              >
+                Email Address <span className="text-red-500 ml-1">*</span>
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="your@example.com"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-0 focus:border-green-500 dark:focus:border-green-400 focus:shadow-lg focus:shadow-green-100 dark:focus:shadow-green-900/20 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="phone"
+                className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
+              >
+                Phone Number <span className="text-red-500 ml-1">*</span>
+              </Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+91 9876543210"
+                value={userPhone}
+                onChange={(e) => setUserPhone(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-0 focus:border-green-500 dark:focus:border-green-400 focus:shadow-lg focus:shadow-green-100 dark:focus:shadow-green-900/20 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-500"
+              />
+            </div>
+
+            {splunkPackage && (
+              <>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="splunk-install"
+                    className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
+                  >
+                    Splunk Installation <span className="text-red-500 ml-1">*</span>
+                  </Label>
+                  <Select value={splunkInstall} onValueChange={(value: "yes" | "no") => setSplunkInstall(value)}>
+                    <SelectTrigger
+                      id="splunk-install"
+                      className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-0 focus:border-green-500 dark:focus:border-green-400 focus:shadow-lg focus:shadow-green-100 dark:focus:shadow-green-900/20 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-500"
+                    >
+                      <SelectValue placeholder="Do you want Splunk to be installed?" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl shadow-xl">
+                      <SelectItem value="yes" className="hover:bg-green-50 dark:hover:bg-green-900/20">
+                        yes
+                      </SelectItem>
+                      <SelectItem value="no" className="hover:bg-green-50 dark:hover:bg-green-900/20">
+                        no
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="botsv3-dataset"
+                    className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
+                  >
+                    BotsV3 Dataset <span className="text-red-500 ml-1">*</span>
+                  </Label>
+                  <Select value={botsv3Dataset} onValueChange={(value: "yes" | "no") => setBotsv3Dataset(value)}>
+                    <SelectTrigger
+                      id="botsv3-dataset"
+                      className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-0 focus:border-green-500 dark:focus:border-green-400 focus:shadow-lg focus:shadow-green-100 dark:focus:shadow-green-900/20 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-500"
+                    >
+                      <SelectValue placeholder="Include BotsV3 dataset?" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl shadow-xl">
+                      <SelectItem value="yes" className="hover:bg-green-50 dark:hover:bg-green-900/20">
+                        yes
+                      </SelectItem>
+                      <SelectItem value="no" className="hover:bg-green-50 dark:hover:bg-green-900/20">
+                        no
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="environment" className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Environment Name
+              </Label>
+              <Input
+                id="environment"
+                readOnly
+                value={environmentName}
+                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 text-gray-600 dark:text-gray-300 cursor-not-allowed"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Premium Footer */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-700 border-t border-gray-200 dark:border-gray-600 p-6">
+          {formError && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-red-600 dark:text-red-400 text-sm text-center font-medium">{formError}</p>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              disabled={loading}
+              className="w-full sm:w-auto px-8 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleProceed}
+              disabled={loading}
+              className="w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 font-semibold"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Proceed to Payment"
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
