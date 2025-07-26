@@ -23,6 +23,7 @@ interface RazorpayOptions {
     environment: string
     splunk_install?: string
     botsv3_dataset?: string
+    name?: string // Added name to notes
   }
   theme: {
     color: string
@@ -165,7 +166,12 @@ export function RazorpayCheckout({
       return
     }
 
-    if (splunkPackage && (!splunkInstall || !botsv3Dataset)) {
+    if (splunkPackage && packageDetails.envId !== "distributed" && (!splunkInstall || !botsv3Dataset)) {
+      setFormError("Please fill in all Splunk-specific fields.")
+      return
+    }
+
+    if (splunkPackage && packageDetails.envId === "distributed" && !splunkInstall) {
       setFormError("Please fill in all Splunk-specific fields.")
       return
     }
@@ -191,11 +197,15 @@ export function RazorpayCheckout({
 
       const notes: any = {
         environment: environmentName,
+        name: userName, // Added name to notes
       }
 
       if (splunkPackage) {
         notes.splunk_install = splunkInstall
-        notes.botsv3_dataset = botsv3Dataset
+        // Only add botsv3_dataset if it's not a distributed cluster
+        if (packageDetails.envId !== "distributed") {
+          notes.botsv3_dataset = botsv3Dataset
+        }
       }
 
       const options: RazorpayOptions = {
@@ -386,34 +396,37 @@ export function RazorpayCheckout({
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="botsv3-dataset"
-                    className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
-                  >
-                    BotsV3 Dataset <span className="text-red-500 ml-1">*</span>
-                  </Label>
-                  <Select value={botsv3Dataset} onValueChange={(value: "yes" | "no") => setBotsv3Dataset(value)}>
-                    <SelectTrigger
-                      id="botsv3-dataset"
-                      className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-0 focus:border-green-500 dark:focus:border-green-400 focus:shadow-lg focus:shadow-green-100 dark:focus:shadow-green-900/20 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-500"
+                {packageDetails.envId !== "distributed" && ( // Conditionally render BotsV3 Dataset
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="botsv3-dataset"
+                      className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
                     >
-                      <SelectValue placeholder="Include BotsV3 dataset?" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl shadow-xl">
-                      <SelectItem value="yes" className="hover:bg-green-50 dark:hover:bg-green-900/20">
-                        yes
-                      </SelectItem>
-                      <SelectItem value="no" className="hover:bg-green-50 dark:hover:bg-green-900/20">
-                        no
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                      BotsV3 Dataset <span className="text-red-500 ml-1">*</span>
+                    </Label>
+                    <Select value={botsv3Dataset} onValueChange={(value: "yes" | "no") => setBotsv3Dataset(value)}>
+                      <SelectTrigger
+                        id="botsv3-dataset"
+                        className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-0 focus:border-green-500 dark:focus:border-green-400 focus:shadow-lg focus:shadow-green-100 dark:focus:shadow-green-900/20 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-500"
+                      >
+                        <SelectValue placeholder="Include BotsV3 dataset?" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl shadow-xl">
+                        <SelectItem value="yes" className="hover:bg-green-50 dark:hover:bg-green-900/20">
+                          yes
+                        </SelectItem>
+                        <SelectItem value="no" className="hover:bg-green-50 dark:hover:bg-green-900/20">
+                          no
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </>
             )}
 
-            <div className="space-y-2">
+            {/* Environment Name is now hidden from UI */}
+            {/* <div className="space-y-2">
               <Label htmlFor="environment" className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                 Environment Name
               </Label>
@@ -423,7 +436,7 @@ export function RazorpayCheckout({
                 value={environmentName}
                 className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 text-gray-600 dark:text-gray-300 cursor-not-allowed"
               />
-            </div>
+            </div> */}
           </div>
         </div>
 
