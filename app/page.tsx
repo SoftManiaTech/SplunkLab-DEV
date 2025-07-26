@@ -83,7 +83,6 @@ const sendLogToSplunk = async ({
 interface SelectedPackageDetails {
   amount: number
   hours: number
-  paymentLink: string
   components?: string[]
   envTitle?: string
   envId?: string // Add this line
@@ -185,7 +184,6 @@ export default function LabEnvironments() {
     setSelectedPackageDetails({
       amount: option.amount,
       hours: option.hours,
-      paymentLink: option.paymentLink,
       components: env.components,
       envTitle: env.title,
       envId: env.id, // Add this line

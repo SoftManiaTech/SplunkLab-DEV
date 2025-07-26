@@ -28,7 +28,7 @@ interface EnvironmentOption {
   features: string[]
   info: string[]
   components?: string[]
-  pricing: { amount: number; days?: number; hours: number; popular?: boolean; paymentLink: string }[]
+  pricing: { amount: number; days?: number; hours: number; popular?: boolean; }[]
   redirectUrl: string
   color: string
   bgColor: string
@@ -71,13 +71,13 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["Splunk Enterprise"],
         pricing: [
-          { amount: 1, hours: 6, paymentLink: "https://pages.razorpay.com/Splunk-SE-100" },
-          { amount: 200, hours: 14, paymentLink: "https://pages.razorpay.com/Splunk-SE-200" },
-          { amount: 300, hours: 23, paymentLink: "https://pages.razorpay.com/Splunk-SE-300" },
-          { amount: 400, hours: 31, paymentLink: "https://pages.razorpay.com/Splunk-SE-400" },
-          { amount: 500, hours: 40, paymentLink: "https://pages.razorpay.com/Splunk-SE-500", popular: true },
-          { amount: 600, hours: 48, paymentLink: "https://pages.razorpay.com/Splunk-SE-600" },
-          { amount: 700, hours: 56, paymentLink: "https://pages.razorpay.com/Splunk-SE-700" },
+          { amount: 1, hours: 6},
+          { amount: 200, hours: 14},
+          { amount: 300, hours: 23},
+          { amount: 400, hours: 31},
+          { amount: 500, hours: 40, popular: true },
+          { amount: 600, hours: 48},
+          { amount: 700, hours: 56},
 
         ],
         redirectUrl: "https://softmania.com/splunk-standalone-lab",
@@ -105,13 +105,13 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["Search Head", "Indexer", "Heavy Forwarder", "Universal Forwarder"],
         pricing: [
-          { amount: 200, hours: 3, paymentLink: "https://pages.razorpay.com/Splunk-DNC-200" },
-          { amount: 500, hours: 10, paymentLink: "https://pages.razorpay.com/Splunk-DNC-500" },
-          { amount: 1000, hours: 21, paymentLink: "https://pages.razorpay.com/Splunk-DNC-1000", popular: true },
-          { amount: 1500, hours: 31, paymentLink: "https://pages.razorpay.com/Splunk-DNC-1500" },
-          { amount: 2000, hours: 42, paymentLink: "https://pages.razorpay.com/Splunk-DNC-2000" },
-          { amount: 2500, hours: 52, paymentLink: "https://pages.razorpay.com/Splunk-DNC-2500" },
-          { amount: 2800, hours: 58, paymentLink: "https://pages.razorpay.com/Splunk-DNC-2800" },
+          { amount: 200, hours: 3,},
+          { amount: 500, hours: 10,},
+          { amount: 1000, hours: 21, popular: true },
+          { amount: 1500, hours: 31},
+          { amount: 2000, hours: 42},
+          { amount: 2500, hours: 52},
+          { amount: 2800, hours: 58},
 
         ],
         redirectUrl: "https://softmania.com/splunk-distributed-lab",
@@ -139,13 +139,13 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["SH Cluster", "IDX Cluster", "Cluster Master", "HF", "Management server"],
         pricing: [
-          { amount: 500, hours: 5, paymentLink: "https://pages.razorpay.com/Splunk-DC-500" },
-          { amount: 1000, hours: 9, paymentLink: "https://pages.razorpay.com/Splunk-DC-1000" },
-          { amount: 2000, hours: 19, paymentLink: "https://pages.razorpay.com/Splunk-DC-2000" },
-          { amount: 3000, hours: 28, paymentLink: "https://pages.razorpay.com/Splunk-DC-3000", popular: true },
-          { amount: 4000, hours: 38, paymentLink: "https://pages.razorpay.com/Splunk-DC-4000" },
-          { amount: 5000, hours: 47, paymentLink: "https://pages.razorpay.com/Splunk-DC-5000" },
-          { amount: 6000, hours: 56, paymentLink: "https://pages.razorpay.com/Splunk-DC-6000" },
+          { amount: 500, hours: 5},
+          { amount: 1000, hours: 9},
+          { amount: 2000, hours: 19},
+          { amount: 3000, hours: 28, popular: true },
+          { amount: 4000, hours: 38},
+          { amount: 5000, hours: 47},
+          { amount: 6000, hours: 56},
         ],
         redirectUrl: "https://softmania.com/splunk-cluster-lab",
         color: "text-purple-600",
@@ -173,8 +173,8 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["Windows Server (DC)", "DNS Server", "Universal Forwarder"],
         pricing: [
-          { amount: 160, hours: 12, paymentLink: "https://pages.razorpay.com/WinADDNS-DS-160" },
-          { amount: 330, hours: 24, paymentLink: "https://pages.razorpay.com/WinADDNS-DS-330" },
+          { amount: 160, hours: 12},
+          { amount: 330, hours: 24},
         ],
         redirectUrl: "https://softmania.com/windows-ad-dns-logs",
         color: "text-indigo-600",
@@ -190,8 +190,8 @@ const pricingCategories: PricingCategory[] = [
         info: ["Requires Linux OS", "Supports various Splunk inputs", "Crucial for host-based security"],
         components: ["Linux OS", "Universal Forwarder", "Auditd"],
         pricing: [
-          { amount: 130, hours: 9, paymentLink: "https://pages.razorpay.com/LinuxData-DS-130" },
-          { amount: 270, hours: 19, paymentLink: "https://pages.razorpay.com/LinuxData-DS-270" },
+          { amount: 130, hours: 9},
+          { amount: 270, hours: 19},
         ],
         redirectUrl: "https://softmania.com/linux-data-sources",
         color: "text-purple-600",
@@ -218,8 +218,8 @@ const pricingCategories: PricingCategory[] = [
           "Syslog-ng Server",
         ],
         pricing: [
-          { amount: 130, hours: 9, paymentLink: "https://pages.razorpay.com/SyslogNG-DS-130" },
-          { amount: 270, hours: 19, paymentLink: "https://pages.razorpay.com/SyslogNG-DS-270" },
+          { amount: 130, hours: 9},
+          { amount: 270, hours: 19},
         ],
         redirectUrl: "https://softmania.com/syslog-ng-data-source",
         color: "text-cyan-600",
@@ -236,8 +236,8 @@ const pricingCategories: PricingCategory[] = [
         info: ["Requires MySQL server", "Supports database inputs/scripts in Splunk", "Important for data security"],
         components: ["MySQL Server", "Universal Forwarder"],
         pricing: [
-          { amount: 140, hours: 10, paymentLink: "https://pages.razorpay.com/MySQL-DS-140" },
-          { amount: 290, hours: 20, paymentLink: "https://pages.razorpay.com/MySQL-DS-290" },
+          { amount: 140, hours: 10},
+          { amount: 290, hours: 20},
         ],
         redirectUrl: "https://softmania.com/mysql-logs",
         color: "text-yellow-600",
@@ -258,8 +258,8 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["MSSQL Server", "Universal Forwarder"],
         pricing: [
-          { amount: 150, hours: 11, paymentLink: "https://pages.razorpay.com/MSSQL-DS-150" },
-          { amount: 310, hours: 22, paymentLink: "https://pages.razorpay.com/MSSQL-DS-310" },
+          { amount: 150, hours: 11},
+          { amount: 310, hours: 22},
         ],
         redirectUrl: "https://softmania.com/mssql-logs",
         color: "text-red-600",

@@ -170,14 +170,17 @@ export function RazorpayCheckout({
       return
     }
 
-    if (splunkPackage && packageDetails.envId !== "distributed" && (!splunkInstall || !botsv3Dataset)) {
-      setFormError("Please fill in all Splunk-specific fields.")
-      return
-    }
-
-    if (splunkPackage && packageDetails.envId === "distributed" && !splunkInstall) {
-      setFormError("Please fill in all Splunk-specific fields.")
-      return
+    // Check Splunk-specific fields based on the new logic
+    if (splunkPackage) {
+      if (!splunkInstall) {
+        setFormError("Please fill in the Splunk Installation field.")
+        return
+      }
+      // Only require BotsV3 Dataset if it's NOT a clustered package
+      if (packageDetails.envId !== "clustered" && !botsv3Dataset) {
+        setFormError("Please fill in the BotsV3 Dataset field.")
+        return
+      }
     }
 
     setLoading(true)
@@ -206,8 +209,8 @@ export function RazorpayCheckout({
 
       if (splunkPackage) {
         notes.splunk_install = splunkInstall
-        // Only add botsv3_dataset if it's not a distributed cluster
-        if (packageDetails.envId !== "distributed") {
+        // Only add botsv3_dataset if it's not a clustered package
+        if (packageDetails.envId !== "clustered") {
           notes.botsv3_dataset = botsv3Dataset
         }
       }
@@ -413,7 +416,7 @@ export function RazorpayCheckout({
                   </Select>
                 </div>
 
-                {packageDetails.envId !== "distributed" && ( // Conditionally render BotsV3 Dataset
+                {packageDetails.envId !== "clustered" && ( // ✅ Updated condition: Show if NOT 'clustered'
                   <div className="space-y-2">
                     <Label
                       htmlFor="botsv3-dataset"
