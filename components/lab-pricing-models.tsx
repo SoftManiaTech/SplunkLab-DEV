@@ -14,9 +14,10 @@ import {
   ArrowUpRightFromSquare,
   ChevronDown,
   ChevronUp,
-  MessageSquare,
+  FileText,
   Terminal,
   Users,
+  MessageSquare,
 } from "lucide-react"
 
 interface EnvironmentOption {
@@ -28,7 +29,7 @@ interface EnvironmentOption {
   features: string[]
   info: string[]
   components?: string[]
-  pricing: { amount: number; days?: number; hours: number; popular?: boolean; }[]
+  pricing: { amount: number; days?: number; hours: number; popular?: boolean; paymentLink: string }[]
   redirectUrl: string
   color: string
   bgColor: string
@@ -71,14 +72,13 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["Splunk Enterprise"],
         pricing: [
-          { amount: 1, hours: 6},
-          { amount: 200, hours: 14},
-          { amount: 300, hours: 23},
-          { amount: 400, hours: 31},
-          { amount: 500, hours: 40, popular: true },
-          { amount: 600, hours: 48},
-          { amount: 700, hours: 56},
-
+          { amount: 100, hours: 6, paymentLink: "https://pages.razorpay.com/Splunk-SE-100" },
+          { amount: 200, hours: 14, paymentLink: "https://pages.razorpay.com/Splunk-SE-200" },
+          { amount: 300, hours: 23, paymentLink: "https://pages.razorpay.com/Splunk-SE-300" },
+          { amount: 400, hours: 31, paymentLink: "https://pages.razorpay.com/Splunk-SE-400" },
+          { amount: 500, hours: 40, paymentLink: "https://pages.razorpay.com/Splunk-SE-500", popular: true },
+          { amount: 600, hours: 48, paymentLink: "https://pages.razorpay.com/Splunk-SE-600" },
+          { amount: 700, hours: 56, paymentLink: "https://pages.razorpay.com/Splunk-SE-700" },
         ],
         redirectUrl: "https://softmania.com/splunk-standalone-lab",
         color: "text-green-600",
@@ -105,14 +105,13 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["Search Head", "Indexer", "Heavy Forwarder", "Universal Forwarder"],
         pricing: [
-          { amount: 200, hours: 3,},
-          { amount: 500, hours: 10,},
-          { amount: 1000, hours: 21, popular: true },
-          { amount: 1500, hours: 31},
-          { amount: 2000, hours: 42},
-          { amount: 2500, hours: 52},
-          { amount: 2800, hours: 58},
-
+          { amount: 200, hours: 3, paymentLink: "https://pages.razorpay.com/Splunk-DNC-200" },
+          { amount: 500, hours: 10, paymentLink: "https://pages.razorpay.com/Splunk-DNC-500" },
+          { amount: 1000, hours: 21, paymentLink: "https://pages.razorpay.com/Splunk-DNC-1000", popular: true },
+          { amount: 1500, hours: 31, paymentLink: "https://pages.razorpay.com/Splunk-DNC-1500" },
+          { amount: 2000, hours: 42, paymentLink: "https://pages.razorpay.com/Splunk-DNC-2000" },
+          { amount: 2500, hours: 52, paymentLink: "https://pages.razorpay.com/Splunk-DNC-2500" },
+          { amount: 2800, hours: 58, paymentLink: "https://pages.razorpay.com/Splunk-DNC-2800" },
         ],
         redirectUrl: "https://softmania.com/splunk-distributed-lab",
         color: "text-emerald-600",
@@ -139,13 +138,13 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["SH Cluster", "IDX Cluster", "Cluster Master", "HF", "Management server"],
         pricing: [
-          { amount: 500, hours: 5},
-          { amount: 1000, hours: 9},
-          { amount: 2000, hours: 19},
-          { amount: 3000, hours: 28, popular: true },
-          { amount: 4000, hours: 38},
-          { amount: 5000, hours: 47},
-          { amount: 6000, hours: 56},
+          { amount: 500, hours: 5, paymentLink: "https://pages.razorpay.com/Splunk-DC-500" },
+          { amount: 1000, hours: 9, paymentLink: "https://pages.razorpay.com/Splunk-DC-1000" },
+          { amount: 2000, hours: 19, paymentLink: "https://pages.razorpay.com/Splunk-DC-2000" },
+          { amount: 3000, hours: 28, paymentLink: "https://pages.razorpay.com/Splunk-DC-3000", popular: true },
+          { amount: 4000, hours: 38, paymentLink: "https://pages.razorpay.com/Splunk-DC-4000" },
+          { amount: 5000, hours: 47, paymentLink: "https://pages.razorpay.com/Splunk-DC-5000" },
+          { amount: 6000, hours: 56, paymentLink: "https://pages.razorpay.com/Splunk-DC-6000" },
         ],
         redirectUrl: "https://softmania.com/splunk-cluster-lab",
         color: "text-purple-600",
@@ -158,45 +157,45 @@ const pricingCategories: PricingCategory[] = [
     title: "Security Data Sources",
     description: "Explore various security data sources for your Splunk use cases.",
     environments: [
-      {
-        id: "windows-ad-dns",
-        title: "Windows (AD & DNS)",
-        subtitle: "Active Directory & DNS Security",
-        icon: <Users className="w-6 h-6" />,
-        description:
-          "Monitor Active Directory and DNS server logs for authentication, authorization, and network resolution activities.",
-        features: ["Active Directory audit logs", "DNS query logs", "Group policy changes", "User logon/logoff events"],
-        info: [
-          "Requires Windows Server (Domain Controller, DNS Server)",
-          "Supports WinEventLog input in Splunk",
-          "Essential for identity and network security",
-        ],
-        components: ["Windows Server (DC)", "DNS Server", "Universal Forwarder"],
-        pricing: [
-          { amount: 160, hours: 12},
-          { amount: 330, hours: 24},
-        ],
-        redirectUrl: "https://softmania.com/windows-ad-dns-logs",
-        color: "text-indigo-600",
-        bgColor: "bg-indigo-50 dark:bg-indigo-950/50",
-      },
-      {
-        id: "linux-data-sources",
-        title: "Linux",
-        subtitle: "Comprehensive Linux Monitoring",
-        icon: <Terminal className="w-6 h-6" />,
-        description: "Collect various Linux data beyond just syslogs, including audit logs, process data, and more.",
-        features: ["Audit logs", "Process monitoring", "File integrity monitoring", "Performance metrics"],
-        info: ["Requires Linux OS", "Supports various Splunk inputs", "Crucial for host-based security"],
-        components: ["Linux OS", "Universal Forwarder", "Auditd"],
-        pricing: [
-          { amount: 130, hours: 9},
-          { amount: 270, hours: 19},
-        ],
-        redirectUrl: "https://softmania.com/linux-data-sources",
-        color: "text-purple-600",
-        bgColor: "bg-purple-50 dark:bg-purple-950/50",
-      },
+      // {
+      //   id: "windows-ad-dns",
+      //   title: "Windows (AD & DNS)",
+      //   subtitle: "Active Directory & DNS Security",
+      //   icon: <Users className="w-6 h-6" />,
+      //   description:
+      //     "Monitor Active Directory and DNS server logs for authentication, authorization, and network resolution activities.",
+      //   features: ["Active Directory audit logs", "DNS query logs", "Group policy changes", "User logon/logoff events"],
+      //   info: [
+      //     "Requires Windows Server (Domain Controller, DNS Server)",
+      //     "Supports WinEventLog input in Splunk",
+      //     "Essential for identity and network security",
+      //   ],
+      //   components: ["Windows Server (DC)", "DNS Server", "Universal Forwarder"],
+      //   pricing: [
+      //     { amount: 160, hours: 12, paymentLink: "https://pages.razorpay.com/WinADDNS-DS-160" },
+      //     { amount: 330, hours: 24, paymentLink: "https://pages.razorpay.com/WinADDNS-DS-330" },
+      //   ],
+      //   redirectUrl: "https://softmania.com/windows-ad-dns-logs",
+      //   color: "text-indigo-600",
+      //   bgColor: "bg-indigo-50 dark:bg-indigo-950/50",
+      // },
+      // {
+      //   id: "linux-data-sources",
+      //   title: "Linux",
+      //   subtitle: "Comprehensive Linux Monitoring",
+      //   icon: <Terminal className="w-6 h-6" />,
+      //   description: "Collect various Linux data beyond just syslogs, including audit logs, process data, and more.",
+      //   features: ["Audit logs", "Process monitoring", "File integrity monitoring", "Performance metrics"],
+      //   info: ["Requires Linux OS", "Supports various Splunk inputs", "Crucial for host-based security"],
+      //   components: ["Linux OS", "Universal Forwarder", "Auditd"],
+      //   pricing: [
+      //     { amount: 130, hours: 9, paymentLink: "https://pages.razorpay.com/LinuxData-DS-130" },
+      //     { amount: 270, hours: 19, paymentLink: "https://pages.razorpay.com/LinuxData-DS-270" },
+      //   ],
+      //   redirectUrl: "https://softmania.com/linux-data-sources",
+      //   color: "text-purple-600",
+      //   bgColor: "bg-purple-50 dark:bg-purple-950/50",
+      // },
       {
         id: "syslog-ng",
         title: "Syslog-ng",
@@ -214,12 +213,15 @@ const pricingCategories: PricingCategory[] = [
           "Enabled ports: 22, 80, 443, 514, 5514",
           "Dynamic Public IP",
         ],
-        components: [
-          "Syslog-ng Server",
-        ],
+        components: ["Syslog-ng Server"],
         pricing: [
-          { amount: 130, hours: 9},
-          { amount: 270, hours: 19},
+          { amount: 100, hours: 6, paymentLink: "https://pages.razorpay.com/syslog-100" },
+          { amount: 200, hours: 14, paymentLink: "https://pages.razorpay.com/syslog-200" },
+          { amount: 300, hours: 23, paymentLink: "https://pages.razorpay.com/syslog-300" },
+          { amount: 400, hours: 31, paymentLink: "https://pages.razorpay.com/syslog-400" },
+          { amount: 500, hours: 40, paymentLink: "https://pages.razorpay.com/syslog-500" },
+          { amount: 600, hours: 48, paymentLink: "https://pages.razorpay.com/syslog-600" },
+          { amount: 700, hours: 56, paymentLink: "https://pages.razorpay.com/syslog-700" },
         ],
         redirectUrl: "https://softmania.com/syslog-ng-data-source",
         color: "text-cyan-600",
@@ -236,8 +238,13 @@ const pricingCategories: PricingCategory[] = [
         info: ["Requires MySQL server", "Supports database inputs/scripts in Splunk", "Important for data security"],
         components: ["MySQL Server", "Universal Forwarder"],
         pricing: [
-          { amount: 140, hours: 10},
-          { amount: 290, hours: 20},
+          { amount: 100, hours: 6, paymentLink: "https://pages.razorpay.com/mysql-100" },
+          { amount: 200, hours: 14, paymentLink: "https://pages.razorpay.com/mysql-200" },
+          { amount: 300, hours: 23, paymentLink: "https://pages.razorpay.com/mysql-300" },
+          { amount: 400, hours: 31, paymentLink: "https://pages.razorpay.com/mysql-400" },
+          { amount: 500, hours: 40, paymentLink: "https://pages.razorpay.com/mysql-500" },
+          { amount: 600, hours: 48, paymentLink: "https://pages.razorpay.com/mysql-600" },
+          { amount: 700, hours: 56, paymentLink: "https://pages.razorpay.com/mysql-700" },
         ],
         redirectUrl: "https://softmania.com/mysql-logs",
         color: "text-yellow-600",
@@ -258,14 +265,84 @@ const pricingCategories: PricingCategory[] = [
         ],
         components: ["MSSQL Server", "Universal Forwarder"],
         pricing: [
-          { amount: 150, hours: 11},
-          { amount: 310, hours: 22},
+          { amount: 200, hours: 14, paymentLink: "https://pages.razorpay.com/mssql-200" },
+          { amount: 400, hours: 31, paymentLink: "https://pages.razorpay.com/mssql-400" },
+          { amount: 600, hours: 48, paymentLink: "https://pages.razorpay.com/mssql-600" },
+          { amount: 800, hours: 65, paymentLink: "https://pages.razorpay.com/mssql-800" },
+          { amount: 1000, hours: 80, paymentLink: "https://pages.razorpay.com/mssql-1000" },
+          { amount: 1200, hours: 95, paymentLink: "https://pages.razorpay.com/mssql-1200" },
+          { amount: 1400, hours: 110, paymentLink: "https://pages.razorpay.com/mssql-1400" },
         ],
         redirectUrl: "https://softmania.com/mssql-logs",
         color: "text-red-600",
         bgColor: "bg-red-50 dark:bg-red-950/50",
       },
-
+      {
+        id: "ossec",
+        title: "OSSEC",
+        subtitle: "Host-based Intrusion Detection",
+        icon: <FileText className="w-6 h-6" />,
+        description:
+          "Deploy and monitor OSSEC HIDS for real-time log analysis, file integrity checking, and rootkit detection.",
+        features: [
+          "Log analysis and correlation",
+          "File integrity monitoring (FIM)",
+          "Rootkit detection",
+          "Active response capabilities",
+        ],
+        info: [
+          "(OS: Red Hat-9) (RAM: 4 GB) (vCPUs: 2)",
+          "OSSEC Server and Agent setup",
+          "Integration with Splunk for centralized logging",
+          "Dynamic Public IP",
+        ],
+        components: ["OSSEC Server", "OSSEC Agent", "Universal Forwarder"],
+        pricing: [
+          { amount: 100, hours: 6, paymentLink: "https://pages.razorpay.com/ossec-100" },
+          { amount: 200, hours: 14, paymentLink: "https://pages.razorpay.com/ossec-200" },
+          { amount: 300, hours: 23, paymentLink: "https://pages.razorpay.com/ossec-300" },
+          { amount: 400, hours: 31, paymentLink: "https://pages.razorpay.com/ossec-400" },
+          { amount: 500, hours: 40, paymentLink: "https://pages.razorpay.com/ossec-500" },
+          { amount: 600, hours: 48, paymentLink: "https://pages.razorpay.com/ossec-600" },
+          { amount: 700, hours: 56, paymentLink: "https://pages.razorpay.com/ossec-700" },
+        ],
+        redirectUrl: "https://softmania.com/ossec-hids-data-source",
+        color: "text-orange-600",
+        bgColor: "bg-orange-50 dark:bg-orange-950/50",
+      },
+      {
+        id: "jenkins",
+        title: "Jenkins CI/CD",
+        subtitle: "DevOps Pipeline Monitoring",
+        icon: <Terminal className="w-6 h-6" />,
+        description:
+          "Monitor Jenkins build and deployment logs for insights into your CI/CD pipeline's performance and security.",
+        features: [
+          "Jenkins server setup",
+          "Build logs collection",
+          "Deployment status monitoring",
+          "User activity tracking",
+        ],
+        info: [
+          "(OS: Red Hat-9) (RAM: 4 GB) (vCPUs: 2)",
+          "Jenkins LTS Version",
+          "Integration with Splunk for CI/CD observability",
+          "Dynamic Public IP",
+        ],
+        components: ["Jenkins Server", "Universal Forwarder"],
+        pricing: [
+          { amount: 100, hours: 6, paymentLink: "https://pages.razorpay.com/jenkins-100" },
+          { amount: 200, hours: 14, paymentLink: "https://pages.razorpay.com/jenkins-200" },
+          { amount: 300, hours: 23, paymentLink: "https://pages.razorpay.com/jenkins-300" },
+          { amount: 400, hours: 31, paymentLink: "https://pages.razorpay.com/jenkins-400" },
+          { amount: 500, hours: 40, paymentLink: "https://pages.razorpay.com/jenkins-500" },
+          { amount: 600, hours: 48, paymentLink: "https://pages.razorpay.com/jenkins-600" },
+          { amount: 700, hours: 56, paymentLink: "https://pages.razorpay.com/jenkins-700" },
+        ],
+        redirectUrl: "https://softmania.com/jenkins-ci-cd-data-source",
+        color: "text-blue-600",
+        bgColor: "bg-blue-50 dark:bg-blue-950/50",
+      },
     ],
   },
 ]
@@ -427,12 +504,13 @@ export function LabPricingModels({ onPackageSelect, selectedPricing }: LabPricin
                               key={index}
                               onClick={() => onPackageSelect(env, option)}
                               className={`relative p-4 rounded-2xl border text-center cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02]
-${selectedPricing[env.id]?.amount === option.amount
-                                  ? "border-green-500 bg-green-50 dark:bg-green-950/50 ring-1 ring-green-200 dark:ring-green-800 shadow-md"
-                                  : option.popular
-                                    ? "border-green-500 bg-green-50 dark:bg-green-950/50 shadow-sm"
-                                    : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
-                                }`}
+${
+  selectedPricing[env.id]?.amount === option.amount
+    ? "border-green-500 bg-green-50 dark:bg-green-950/50 ring-1 ring-green-200 dark:ring-green-800 shadow-md"
+    : option.popular
+      ? "border-green-500 bg-green-50 dark:bg-green-950/50 shadow-sm"
+      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
+}`}
                             >
                               {/* Selected Badge */}
                               {selectedPricing[env.id]?.amount === option.amount && (
