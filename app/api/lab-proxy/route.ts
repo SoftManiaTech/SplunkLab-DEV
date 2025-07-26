@@ -1,40 +1,33 @@
-// File: app/api/lab-proxy/route.ts
+// app/api/lab-proxy/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_ACTIONS = [
-  "start",
-  "stop",
-  "reboot",
-  "instances",
-  "check-user-lab",
-  "usage-summary",
-  "get-user-keys",
-];
-const BACKEND = process.env.NEXT_PUBLIC_API_URL!;
-
+const API_URL = process.env.NEXT_PUBLIC_API_URL as string;
 
 export async function POST(req: NextRequest) {
   try {
-    const { action, payload } = await req.json();
-    const email = req.headers.get("authorization")?.replace("Bearer ", "");
+    const { path, method = "GET", body } = await req.json();
+    const userEmail = req.headers.get("x-user-email") || "unknown";
 
-    if (!ALLOWED_ACTIONS.includes(action)) {
-      return NextResponse.json({ error: "Invalid action" }, { status: 403 });
-    }
-
-    const res = await fetch(`${BACKEND}/${action}`, {
-      method: "POST",
+    const targetUrl = `${API_URL}${path}`;
+    const options: RequestInit = {
+      method,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${email}`,
+        Authorization: `Bearer ${userEmail}`,
       },
-      body: JSON.stringify(payload),
-    });
+      body: method !== "GET" ? JSON.stringify(body || {}) : undefined,
+    };
 
+    const res = await fetch(targetUrl, options);
     const data = await res.json();
-    return NextResponse.json(data);
+
+    return NextResponse.json(data, { status: res.status });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Internal error" }, { status: 500 });
+    console.error("Proxy error:", err.message);
+    return NextResponse.json(
+      { error: "Proxy request failed" },
+      { status: 500 }
+    );
   }
 }
