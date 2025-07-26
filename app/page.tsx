@@ -7,7 +7,7 @@ import Salesiq from "@/components/salesiq"
 import { LabHeader } from "@/components/lab-header"
 import { LabFAQ } from "@/components/lab-faq"
 import { LabFooter } from "@/components/lab-footer"
-import { ContactModal } from "@/components/contact-modal";
+import { ContactModal } from "@/components/contact-modal"
 import { Server, Info } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
@@ -94,16 +94,16 @@ export default function LabEnvironments() {
   const [showContactModal, setShowContactModal] = useState(false)
   const router = useRouter()
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
-  const popupRef = useRef<HTMLDivElement | null>(null)
   const [expandedFeatures, setExpandedFeatures] = useState<Record<string, boolean>>({})
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({})
-  const [showConfirmationModal, setShowConfirmationModal] = useState(false)
   const [selectedPackageDetails, setSelectedPackageDetails] = useState<SelectedPackageDetails | null>(null)
   const [policyConfirmed, setPolicyConfirmed] = useState(false)
   // ✅ Correctly persistent session ID across reloads
   const sessionId = useRef("")
   const sessionStart = useRef(performance.now())
-  const [showRazorpayCheckout, setShowRazorpayCheckout] = useState(false)
+  // State to manage the multi-step flow: 0=closed, 1=confirm package, 2=customer details
+  const [currentStep, setCurrentStep] = useState(0)
+  const popupRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const existingSession = sessionStorage.getItem("lab-session-id")
@@ -203,14 +203,14 @@ export default function LabEnvironments() {
     })
 
     setPolicyConfirmed(false)
-    setShowConfirmationModal(true)
+    setCurrentStep(1) // Open the first popup (Confirm Your Package)
   }
 
-  const handleProceedToPayment = () => {
+  const handleProceedToCustomerDetails = () => {
     sendLogToSplunk({
       sessionId: sessionId.current,
-      action: "user_clicked_payment",
-      title: "User clicked payment",
+      action: "user_clicked_next_to_customer_details",
+      title: "User clicked next to customer details",
       details: {
         package: selectedPackageDetails?.envTitle,
         amount: selectedPackageDetails?.amount,
@@ -218,9 +218,7 @@ export default function LabEnvironments() {
       },
     })
 
-    // Close confirmation modal and open Razorpay checkout
-    setShowConfirmationModal(false)
-    setShowRazorpayCheckout(true)
+    setCurrentStep(2) // Move to the second step (Customer Details)
   }
 
   const handleRazorpaySuccess = async (response: any) => {
@@ -250,7 +248,7 @@ export default function LabEnvironments() {
           },
         })
 
-        setShowRazorpayCheckout(false)
+        setCurrentStep(0) // Close all popups
         setShowSuccessPopup(true)
 
         event({
@@ -280,7 +278,7 @@ export default function LabEnvironments() {
       },
     })
 
-    setShowRazorpayCheckout(false)
+    setCurrentStep(0) // Close all popups
 
     event({
       action: "payment_failure",
@@ -363,6 +361,22 @@ export default function LabEnvironments() {
     }
   }, [showSuccessPopup])
 
+  useEffect(() => {
+    const threshold = 160
+    const checkDevTools = () => {
+      if (window.outerHeight - window.innerHeight > threshold) {
+        sendLogToSplunk({
+          sessionId: sessionId.current,
+          action: "devtools_detected",
+          title: "DevTools Detected",
+        })
+        window.location.href = "https://splunklab.softmania.in/blocked"
+      }
+    }
+
+    window.addEventListener("resize", checkDevTools)
+    return () => window.removeEventListener("resize", checkDevTools)
+  }, [])
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -381,9 +395,22 @@ export default function LabEnvironments() {
       <LabHero />
 
       <LabPricingModels onPackageSelect={handlePackageSelect} selectedPricing={selectedPricing} />
-      <Dialog open={showConfirmationModal} onOpenChange={setShowConfirmationModal}>
+      <Dialog open={currentStep === 1} onOpenChange={(open) => !open && setCurrentStep(0)}>
         <DialogContent className="w-[95vw] max-w-lg mx-auto bg-white rounded-lg shadow-xl border border-gray-200 max-h-[95vh] overflow-hidden flex flex-col">
           <DialogHeader className="flex-shrink-0 text-center p-6 pb-4 border-b border-gray-100">
+            {/* Minimalistic Tracker UI */}
+            <div className="flex justify-center items-center gap-2 mb-4">
+              <div
+                className={`w-3 h-3 rounded-full transition-colors duration-300 ${
+                  currentStep === 1 ? "bg-green-600" : "bg-gray-300"
+                }`}
+              ></div>
+              <div
+                className={`w-3 h-3 rounded-full transition-colors duration-300 ${
+                  currentStep === 2 ? "bg-green-600" : "bg-gray-300"
+                }`}
+              ></div>
+            </div>
             <DialogTitle className="text-xl sm:text-2xl font-bold text-gray-900">Confirm Your Package</DialogTitle>
             {selectedPackageDetails && (
               <p className="text-gray-600 text-xs sm:text-sm mt-2 leading-relaxed">
@@ -495,17 +522,17 @@ export default function LabEnvironments() {
             <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
               <Button
                 variant="outline"
-                onClick={() => setShowConfirmationModal(false)}
+                onClick={() => setCurrentStep(0)} // Close the modal
                 className="w-full sm:w-auto order-2 sm:order-1"
               >
                 Cancel
               </Button>
               <Button
-                onClick={handleProceedToPayment}
+                onClick={handleProceedToCustomerDetails} // Changed to navigate to next step
                 disabled={!policyConfirmed}
                 className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto order-1 sm:order-2"
               >
-                Proceed to Payment
+                Next {/* Changed button text */}
               </Button>
             </div>
           </div>
@@ -533,17 +560,21 @@ export default function LabEnvironments() {
 
       <LabFooter />
       <Salesiq />
-      <RazorpayCheckout
-        isOpen={showRazorpayCheckout}
-        onClose={() => setShowRazorpayCheckout(false)}
-        amount={selectedPackageDetails?.amount || 0}
-        packageDetails={{
-          envTitle: selectedPackageDetails?.envTitle,
-          envId: selectedPackageDetails?.envId || "",
-        }}
-        onSuccess={handleRazorpaySuccess}
-        onError={handleRazorpayError}
-      />
+      {selectedPackageDetails && (
+        <RazorpayCheckout
+          isOpen={currentStep === 2} // Open when currentStep is 2
+          onClose={() => setCurrentStep(0)} // Close all popups
+          onPreviousStep={() => setCurrentStep(1)} // Added prop to go back to step 1
+          amount={selectedPackageDetails.amount || 0}
+          packageDetails={{
+            envTitle: selectedPackageDetails.envTitle,
+            envId: selectedPackageDetails.envId || "",
+          }}
+          onSuccess={handleRazorpaySuccess}
+          onError={handleRazorpayError}
+          currentStep={currentStep} // Pass current step for tracker UI
+        />
+      )}
 
       {showSuccessPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">

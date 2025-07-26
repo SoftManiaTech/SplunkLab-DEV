@@ -43,6 +43,7 @@ declare global {
 interface RazorpayCheckoutProps {
   isOpen: boolean
   onClose: () => void
+  onPreviousStep: () => void // Added onPreviousStep prop
   amount: number
   packageDetails: {
     envTitle?: string
@@ -50,15 +51,18 @@ interface RazorpayCheckoutProps {
   }
   onSuccess: (response: any) => void
   onError: (error: any) => void
+  currentStep: number // Added currentStep prop
 }
 
 export function RazorpayCheckout({
   isOpen,
   onClose,
+  onPreviousStep, // Destructure onPreviousStep
   amount,
   packageDetails,
   onSuccess,
   onError,
+  currentStep, // Destructure currentStep
 }: RazorpayCheckoutProps) {
   const [userName, setUserName] = useState("")
   const [userEmail, setUserEmail] = useState("")
@@ -300,6 +304,19 @@ export function RazorpayCheckout({
           </button>
 
           <div className="text-center pr-12">
+            {/* Minimalistic Tracker UI */}
+            <div className="flex justify-center items-center gap-2 mb-4">
+              <div
+                className={`w-3 h-3 rounded-full transition-colors duration-300 ${
+                  currentStep === 1 ? "bg-green-600" : "bg-gray-300"
+                }`}
+              ></div>
+              <div
+                className={`w-3 h-3 rounded-full transition-colors duration-300 ${
+                  currentStep === 2 ? "bg-green-600" : "bg-gray-300"
+                }`}
+              ></div>
+            </div>
             <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-200 bg-clip-text text-transparent">
               Enter Your Details
             </h2>
@@ -451,11 +468,11 @@ export function RazorpayCheckout({
           <div className="flex flex-col sm:flex-row justify-end gap-3">
             <Button
               variant="outline"
-              onClick={onClose}
+              onClick={onPreviousStep} // Changed to go to previous step
               disabled={loading}
               className="w-full sm:w-auto px-8 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 font-semibold"
             >
-              Cancel
+              Previous {/* Changed button text */}
             </Button>
             <Button
               onClick={handleProceed}
