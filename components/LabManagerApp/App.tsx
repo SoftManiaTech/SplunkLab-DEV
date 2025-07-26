@@ -40,19 +40,21 @@ function App(): JSX.Element {
   const SECRET_KEY =
     process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "softmania_secret";
 
-  const [usage, setUsage] = useState<Record<
-    string,
-    {
-      quota_hours: number;
-      used_hours: number;
-      balance_hours: number;
-      quota_days: number;
-      used_days: number;
-      balance_days: number;
-      plan_start_date?: string;
-      plan_end_date?: string;
-    }
-  > | null>(null);
+  const [usage, setUsage] = useState<
+    Record<
+      string,
+      {
+        quota_hours: number;
+        used_hours: number;
+        balance_hours: number;
+        quota_days: number;
+        used_days: number;
+        balance_days: number;
+        plan_start_date?: string;
+        plan_end_date?: string;
+      }
+    > | null
+  >(null);
 
   const [refreshing, setRefreshing] = useState(false);
   const [pemFiles, setPemFiles] = useState<{ filename: string; url: string }[]>(
@@ -82,16 +84,8 @@ function App(): JSX.Element {
   const fetchInstances = async (userEmail: string) => {
     try {
       setLoading(true);
-      const res = await fetch("/api/lab-proxy", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userEmail}`,
-        },
-        body: JSON.stringify({
-          action: "instances",
-          payload: {},
-        }),
+      const res = await fetch(`${API_URL}/instances`, {
+        headers: { Authorization: `Bearer ${userEmail}` },
       });
       const data = await res.json();
       setInstances(data);
@@ -105,16 +99,10 @@ function App(): JSX.Element {
   const fetchUsageSummary = async (userEmail: string) => {
     try {
       setRefreshing(true);
-      const res = await fetch("/api/lab-proxy", {
+      const res = await fetch(`${API_URL}/usage-summary`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userEmail}`,
-        },
-        body: JSON.stringify({
-          action: "usage-summary",
-          payload: { email: userEmail },
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail }),
       });
 
       if (!res.ok) throw new Error("Usage fetch failed");
@@ -147,16 +135,10 @@ function App(): JSX.Element {
 
   const fetchPemFiles = async (userEmail: string) => {
     try {
-      const res = await fetch("/api/lab-proxy", {
+      const res = await fetch(`${API_URL}/get-user-keys`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userEmail}`,
-        },
-        body: JSON.stringify({
-          action: "get-user-keys",
-          payload: { email: userEmail },
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail }),
       });
       const data = await res.json();
       setPemFiles(data.files || []);
@@ -167,17 +149,12 @@ function App(): JSX.Element {
 
   const checkIfUserHasLab = async (userEmail: string) => {
     try {
-      const res = await fetch("/api/lab-proxy", {
+      const res = await fetch(`${API_URL}/check-user-lab`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userEmail}`,
-        },
-        body: JSON.stringify({
-          action: "check-user-lab",
-          payload: { email: userEmail },
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail }),
       });
+
       const data = await res.json();
       setHasLab(data.hasLab || false);
       return data.hasLab;
@@ -354,12 +331,10 @@ function App(): JSX.Element {
                 {/* Left: Welcome Text */}
                 <div>
                   <h2 className="text-lg text-[#2c3e50] font-bold">
-                    Welcome back,{" "}
-                    <span className="text-[#007acc]">{userName}</span>
+                    Welcome back, <span className="text-[#007acc]">{userName}</span>
                   </h2>
                   <p className="text-sm text-[#34495e]">
-                    This is your personal{" "}
-                    <strong>Lab Server Manager Dashboard</strong> 🚀
+                    This is your personal <strong>Lab Server Manager Dashboard</strong> 🚀
                   </p>
                 </div>
 
@@ -368,11 +343,10 @@ function App(): JSX.Element {
                   <button
                     onClick={() => fetchUsageSummary(email)}
                     disabled={refreshing}
-                    className={`p-2 rounded-full ${
-                      refreshing
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-amber-500 hover:bg-amber-600 text-gray-700"
-                    } text-white`}
+                    className={`p-2 rounded-full ${refreshing
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-amber-500 hover:bg-amber-600 text-gray-700"
+                      } text-white`}
                     title="Refresh Usage"
                   >
                     <RefreshCcw
@@ -392,48 +366,30 @@ function App(): JSX.Element {
               <div className="w-full px-3 sm:px-4">
                 {usage &&
                   Object.entries(usage).map(([serviceType, u]) => (
-                    <div
-                      key={serviceType}
-                      className="w-full text-sm sm:text-sm mt-3"
-                    >
+                    <div key={serviceType} className="w-full text-sm sm:text-sm mt-3">
                       <h3 className="text-sm font-semibold text-gray-800 mb-1">
                         {serviceType} Usage
                       </h3>
 
                       {(u.balance_hours <= 0 || u.balance_days <= 0) && (
                         <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-3 py-1 mb-2">
-                          ⚠️ <strong>Quota exhausted.</strong> Instance will be
-                          terminated soon.
+                          ⚠️ <strong>Quota exhausted.</strong> Instance will be terminated soon.
                         </div>
                       )}
 
                       {/* Desktop View */}
                       <div
-                        className={`hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 rounded px-3 py-2 ${
-                          u.balance_hours <= 0 || u.balance_days <= 0
-                            ? "bg-red-50 border border-red-200 text-red-800"
-                            : "bg-green-50 border border-green-200 text-gray-800"
-                        }`}
+                        className={`hidden sm:flex flex-wrap items-center gap-x-4 gap-y-1 rounded px-3 py-2 ${u.balance_hours <= 0 || u.balance_days <= 0
+                          ? "bg-red-50 border border-red-200 text-red-800"
+                          : "bg-green-50 border border-green-200 text-gray-800"
+                          }`}
                       >
-                        <span>
-                          <strong>Quota:</strong>{" "}
-                          {formatFloatHours(u.quota_hours)} hrs
-                        </span>
-                        <span>
-                          <strong>Used:</strong>{" "}
-                          {formatFloatHours(u.used_hours)} hrs
-                        </span>
-                        <span>
-                          <strong>Left:</strong>{" "}
-                          {formatFloatHours(u.balance_hours)} hrs
-                        </span>
+                        <span><strong>Quota:</strong> {formatFloatHours(u.quota_hours)} hrs</span>
+                        <span><strong>Used:</strong> {formatFloatHours(u.used_hours)} hrs</span>
+                        <span><strong>Left:</strong> {formatFloatHours(u.balance_hours)} hrs</span>
                         <span className="text-gray-400">|</span>
-                        <span>
-                          <strong>Valid:</strong> {u.quota_days} days
-                        </span>
-                        <span>
-                          <strong>Start:</strong> {u.plan_start_date || "N/A"}
-                        </span>
+                        <span><strong>Valid:</strong> {u.quota_days} days</span>
+                        <span><strong>Start:</strong> {u.plan_start_date || "N/A"}</span>
                         <span className="flex items-center gap-2">
                           <strong>End:</strong> {u.plan_end_date || "N/A"}
                           <span className="text-red-500">(terminate)</span>
@@ -442,30 +398,16 @@ function App(): JSX.Element {
 
                       {/* Mobile View */}
                       <div
-                        className={`sm:hidden flex flex-col gap-1 rounded px-3 py-2 ${
-                          u.balance_hours <= 0 || u.balance_days <= 0
-                            ? "bg-red-50 border border-red-200 text-red-800"
-                            : "bg-green-50 border border-green-200 text-gray-800"
-                        }`}
+                        className={`sm:hidden flex flex-col gap-1 rounded px-3 py-2 ${u.balance_hours <= 0 || u.balance_days <= 0
+                          ? "bg-red-50 border border-red-200 text-red-800"
+                          : "bg-green-50 border border-green-200 text-gray-800"
+                          }`}
                       >
-                        <p>
-                          <strong>Quota:</strong>{" "}
-                          {formatFloatHours(u.quota_hours)} hrs
-                        </p>
-                        <p>
-                          <strong>Used:</strong>{" "}
-                          {formatFloatHours(u.used_hours)} hrs
-                        </p>
-                        <p>
-                          <strong>Left:</strong>{" "}
-                          {formatFloatHours(u.balance_hours)} hrs
-                        </p>
-                        <p>
-                          <strong>Valid:</strong> {u.quota_days} days
-                        </p>
-                        <p>
-                          <strong>Start:</strong> {u.plan_start_date || "N/A"}
-                        </p>
+                        <p><strong>Quota:</strong> {formatFloatHours(u.quota_hours)} hrs</p>
+                        <p><strong>Used:</strong> {formatFloatHours(u.used_hours)} hrs</p>
+                        <p><strong>Left:</strong> {formatFloatHours(u.balance_hours)} hrs</p>
+                        <p><strong>Valid:</strong> {u.quota_days} days</p>
+                        <p><strong>Start:</strong> {u.plan_start_date || "N/A"}</p>
                         <p className="flex items-center gap-2">
                           <strong>End:</strong> {u.plan_end_date || "N/A"}
                           <span className="text-red-500">(terminate)</span>
@@ -481,8 +423,7 @@ function App(): JSX.Element {
                     className="text-blue-600 underline"
                   >
                     labsupport@softmania.in
-                  </a>
-                  .
+                  </a>.
                 </p>
               </div>
             </div>
@@ -573,33 +514,35 @@ function App(): JSX.Element {
           </div>
         )}
       </div>
-      {showLogoutModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-xl shadow-lg p-6 w-[90%] max-w-md">
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">
-              Confirm Logout
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to logout from your Lab Manager Dashboard?
-            </p>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={cancelLogout}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmLogout}
-                className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
-              >
-                Logout
-              </button>
+      {
+        showLogoutModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-lg p-6 w-[90%] max-w-md">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                Confirm Logout
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to logout from your Lab Manager Dashboard?
+              </p>
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={cancelLogout}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmLogout}
+                  className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </GoogleOAuthProvider>
+        )
+      }
+    </GoogleOAuthProvider >
   );
 }
 export default App;

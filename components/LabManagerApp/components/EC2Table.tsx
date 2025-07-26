@@ -29,7 +29,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
   setInstances,
   loading,
 }) => {
-  // const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
 
   const [disabledButtons, setDisabledButtons] = useState<
     Record<string, boolean>
@@ -64,13 +64,10 @@ const EC2Table: React.FC<EC2TableProps> = ({
 
     try {
       await axios.post(
-        "/api/lab-proxy",
+        `${apiUrl}/${action}`,
         {
-          action,
-          payload: {
-            instance_id: instanceId,
-            region: instance.Region,
-          },
+          instance_id: instanceId,
+          region: instance.Region,
         },
         {
           headers: { Authorization: `Bearer ${email}` },
@@ -97,17 +94,9 @@ const EC2Table: React.FC<EC2TableProps> = ({
   const fetchInstances = async () => {
     try {
       setRefreshing(true);
-      const res = await axios.post(
-        "/api/lab-proxy",
-        {
-          action: "instances",
-          payload: {},
-        },
-        {
-          headers: { Authorization: `Bearer ${email}` },
-        }
-      );
-
+      const res = await axios.get(`${apiUrl}/instances`, {
+        headers: { Authorization: `Bearer ${email}` },
+      });
       setInstances(res.data);
 
       // ✅ Log refresh event
@@ -260,15 +249,12 @@ const EC2Table: React.FC<EC2TableProps> = ({
     );
   }
 
-  const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>(
-    (acc, inst) => {
-      const key = inst.ServiceType || "Unknown";
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(inst);
-      return acc;
-    },
-    {}
-  );
+  const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>((acc, inst) => {
+    const key = inst.ServiceType || "Unknown";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(inst);
+    return acc;
+  }, {});
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -277,11 +263,10 @@ const EC2Table: React.FC<EC2TableProps> = ({
         <button
           onClick={fetchInstances}
           disabled={refreshing}
-          className={`p-2 rounded-full ${
-            refreshing
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-amber-500 hover:bg-amber-600 text-gray-700"
-          } text-white`}
+          className={`p-2 rounded-full ${refreshing
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-amber-500 hover:bg-amber-600 text-gray-700"
+            } text-white`}
           title="Refresh"
         >
           <RefreshCcw
@@ -369,27 +354,27 @@ const EC2Table: React.FC<EC2TableProps> = ({
                       <td style={{ padding: "10px" }}>
                         {inst.PrivateIp
                           ? renderCopyField(
-                              inst.PrivateIp,
-                              `${inst.InstanceId}_private`
-                            )
+                            inst.PrivateIp,
+                            `${inst.InstanceId}_private`
+                          )
                           : "-"}
                       </td>
                       <td style={{ padding: "10px" }}>
                         {inst.PublicIp
                           ? renderCopyField(
-                              inst.PublicIp,
-                              `${inst.InstanceId}_public`
-                            )
+                            inst.PublicIp,
+                            `${inst.InstanceId}_public`
+                          )
                           : "-"}
                       </td>
                       <td style={{ padding: "10px" }}>
                         {inst.State === "running" &&
-                        inst.PublicIp &&
-                        inst.SSHCommand
+                          inst.PublicIp &&
+                          inst.SSHCommand
                           ? renderCopyField(
-                              inst.SSHCommand,
-                              `${inst.InstanceId}_ssh`
-                            )
+                            inst.SSHCommand,
+                            `${inst.InstanceId}_ssh`
+                          )
                           : "-"}
                       </td>
                       <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
@@ -413,6 +398,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
       ))}
     </div>
   );
+
 };
 
 export default EC2Table;
