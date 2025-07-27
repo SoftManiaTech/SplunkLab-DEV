@@ -148,7 +148,7 @@ export function ConfirmPackageModal({
               />
               <label
                 htmlFor="terms"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-gray-700 dark:text-gray-300"
+                className="leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-gray-700 dark:text-gray-300 py-0 tracking-normal text-xs font-medium leading-[1.1rem]"
               >
                 I understand and agree to{" "}
                 <Link href="/terms" className="text-green-600 hover:underline" target="_blank">

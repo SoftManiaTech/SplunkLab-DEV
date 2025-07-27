@@ -3,8 +3,7 @@
 import { useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { ShoppingCart, X } from "lucide-react"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { ShoppingCart } from "lucide-react"
 import type { CartItem } from "./cart-sidebar"
 
 interface CartDashboardProps {
@@ -24,61 +23,32 @@ export function CartDashboard({ cartItems, onRemoveItem, onOpenCart }: CartDashb
     <AnimatePresence>
       {totalItems > 0 && (
         <motion.div
-          initial={{ y: "100%", opacity: 0 }}
+          initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          exit={{ y: "100%", opacity: 0 }}
-          transition={{ type: "spring", stiffness: 100, damping: 20 }}
-          className="fixed bottom-0 left-0 right-0 z-50 bg-gray-950 text-white shadow-2xl border-t border-gray-800 md:rounded-t-2xl md:mx-auto md:max-w-4xl"
+          exit={{ y: 100, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="fixed bottom-4 inset-x-0 z-50 flex justify-center items-center px-4"
         >
-          <div className="flex flex-col md:flex-row items-center justify-between p-4 md:p-5 gap-4">
-            {/* Mobile View: Summary and Button */}
-            <div className="flex md:hidden w-full justify-between items-center">
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="w-5 h-5 text-green-400" />
-                <span className="font-semibold text-lg">Your Cart ({totalItems})</span>
-              </div>
-              <Button
-                onClick={onOpenCart}
-                className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg text-sm font-semibold shadow-md"
-              >
-                View Cart
-              </Button>
-            </div>
-
-            {/* Desktop View: Detailed Items and Total */}
-            <div className="hidden md:flex flex-1 items-center gap-6 overflow-hidden">
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <ShoppingCart className="w-6 h-6 text-green-400" />
-                <span className="font-bold text-xl">Your Cart</span>
-                <span className="text-gray-400 text-base">({totalItems} items)</span>
-              </div>
-              <ScrollArea className="flex-1 whitespace-nowrap py-1 px-2 -my-1 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent hover:scrollbar-thumb-gray-600">
-                <div className="flex gap-3">
-                  {cartItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="inline-flex items-center bg-gray-800 border border-gray-700 rounded-full px-3 py-1 text-sm font-medium gap-2 flex-shrink-0 text-gray-300"
-                    >
-                      <span>{item.title}</span>
-                      <button
-                        onClick={() => onRemoveItem(item.id)}
-                        className="text-gray-500 hover:text-red-400 transition-colors"
-                        aria-label={`Remove ${item.title}`}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+          <div className="bg-black/90 backdrop-blur-lg border border-white/20 rounded-full px-3 sm:px-4 py-2 sm:py-3 shadow-2xl w-auto">
+            <div className="flex items-center justify-center gap-2 sm:gap-3">
+              {/* Cart Icon with Badge */}
+              <div className="relative flex-shrink-0">
+                <div className="p-1.5 sm:p-2 bg-green-500/20 rounded-full">
+                  <ShoppingCart className="w-3 h-3 sm:w-4 sm:h-4 text-green-400" />
                 </div>
-              </ScrollArea>
-            </div>
+                <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 bg-green-500 text-white text-xs font-bold rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center min-w-[16px] sm:min-w-[20px]">
+                  {totalItems}
+                </span>
+              </div>
 
-            {/* Desktop View: Total and Button */}
-            <div className="hidden md:flex items-center gap-6 flex-shrink-0">
-              <div className="text-xl font-bold text-white">Total: ₹{totalAmount}</div>
+              {/* Total Amount */}
+              <div className="text-white font-semibold text-sm sm:text-base whitespace-nowrap">₹{totalAmount}</div>
+
+              {/* View Cart Button */}
               <Button
                 onClick={onOpenCart}
-                className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-lg text-base font-semibold shadow-md"
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-105 flex-shrink-0"
               >
                 View Cart
               </Button>

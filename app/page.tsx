@@ -19,7 +19,6 @@ import { encryptData, decryptData } from "@/lib/encryption"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle } from "lucide-react" // Added AlertTriangle icon
-import { Toaster, toast } from "sonner" // Import toast from sonner
 
 // Splunk Logging Integration
 const getClientIp = async () => {
@@ -470,26 +469,8 @@ export default function LabEnvironments() {
       handleRemoveItem(existingSplunkPackageToReplace.id) // Remove the old one
       handleAddToCart(newSplunkPackageToReplace) // Add the new one
 
-      toast.success(`${existingSplunkPackageToReplace.title} replaced with ${newSplunkPackageToReplace.title}!`, {
-        position: "top-center",
-        duration: 2000,
-        style: {
-          background: "rgb(17 24 39)", // gray-900
-          color: "white",
-          border: "none",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-          borderRadius: "8px",
-          padding: "12px 16px",
-          fontSize: "14px",
-          fontWeight: "600",
-        },
-        classNames: {
-          title: "text-white font-bold", // Apply bold font
-          description: "text-white/90",
-          icon: "text-white",
-          closeButton: "text-white hover:bg-white/20",
-        },
-      })
+      // Show notification for replacement
+      // You can add a notification state here similar to lab-pricing-models if needed
     }
     setShowSplunkConflictAlert(false)
     setNewSplunkPackageToReplace(null)
@@ -618,26 +599,24 @@ export default function LabEnvironments() {
               </p>
             </div>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-6">
+          <DialogDescription className="text-gray-700 dark:text-gray-300 text-base space-y-3 mx-[7px] px-1.5 py-[27px]">
             {existingSplunkPackageToReplace && newSplunkPackageToReplace && (
-              <DialogDescription className="text-gray-700 dark:text-gray-300 text-base space-y-3">
-                <p>
-                  You currently have{" "}
-                  <span className="font-semibold text-gray-900 dark:text-white">
-                    {existingSplunkPackageToReplace.title}
-                  </span>{" "}
-                  (₹{existingSplunkPackageToReplace.amount}) in your cart.
-                </p>
-                <p>
-                  Would you like to replace it with{" "}
-                  <span className="font-semibold text-green-600 dark:text-green-400">
-                    {newSplunkPackageToReplace.title}
-                  </span>{" "}
-                  (₹{newSplunkPackageToReplace.amount})?
-                </p>
-              </DialogDescription>
+              <>
+                You currently have{" "}
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {existingSplunkPackageToReplace.title}
+                </span>{" "}
+                (₹{existingSplunkPackageToReplace.amount}) in your cart.
+                <br />
+                <br /> {/* Add line breaks for separation */}
+                Would you like to replace it with{" "}
+                <span className="font-semibold text-green-600 dark:text-green-400">
+                  {newSplunkPackageToReplace.title}
+                </span>{" "}
+                (₹{newSplunkPackageToReplace.amount})?
+              </>
             )}
-          </div>
+          </DialogDescription>
           <div className="flex-shrink-0 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-700 border-t border-gray-200 dark:border-gray-600 p-6">
             <div className="flex flex-col sm:flex-row justify-end gap-3">
               <Button
@@ -657,7 +636,6 @@ export default function LabEnvironments() {
           </div>
         </DialogContent>
       </Dialog>
-      <Toaster />
     </div>
   )
 }
