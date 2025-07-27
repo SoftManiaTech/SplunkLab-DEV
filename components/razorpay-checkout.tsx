@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, X } from "lucide-react"
+import type { CartItem } from "./cart-sidebar" // Import CartItem type
 
 interface RazorpayOptions {
   key: string
@@ -24,6 +25,8 @@ interface RazorpayOptions {
     splunk_install?: string
     botsv3_dataset?: string
     name?: string // Added name to notes
+    cart_items_summary: string // New: summary of cart items
+    cart_components_summary?: string // New: summary of components
   }
   theme: {
     color: string
@@ -43,26 +46,27 @@ declare global {
 interface RazorpayCheckoutProps {
   isOpen: boolean
   onClose: () => void
-  onPreviousStep: () => void // Added onPreviousStep prop
+  onPreviousStep: () => void
   amount: number
   packageDetails: {
-    envTitle?: string
-    envId: string
-  }
+    envTitle: string // Combined title from cart
+    envId: string // Combined IDs from cart
+    items: CartItem[] // Full cart items array
+  } | null // Can be null if cart is empty
   onSuccess: (response: any) => void
   onError: (error: any) => void
-  currentStep: number // Added currentStep prop
+  currentStep: number
 }
 
 export function RazorpayCheckout({
   isOpen,
   onClose,
-  onPreviousStep, // Destructure onPreviousStep
+  onPreviousStep,
   amount,
   packageDetails,
   onSuccess,
   onError,
-  currentStep, // Destructure currentStep
+  currentStep,
 }: RazorpayCheckoutProps) {
   const [userName, setUserName] = useState("")
   const [userEmail, setUserEmail] = useState("")
@@ -72,60 +76,58 @@ export function RazorpayCheckout({
   const [loading, setLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  const getEnvironmentName = (envId: string, amount: number): string => {
+  // Determine if any Splunk package is in the cart
+  const hasSplunkPackage = packageDetails?.items.some((item) => item.type === "splunk") || false
+  // Determine if a clustered Splunk package is in the cart
+  const hasClusteredSplunkPackage = packageDetails?.items.some((item) => item.id === "clustered") || false
+
+  const getEnvironmentName = (envId: string, itemAmount: number): string => {
     switch (envId) {
       case "standalone":
-        return `Splunk-SE-${amount}`
+        return `Splunk-SE-${itemAmount}.template`
       case "distributed":
-        return `Splunk-DNC-${amount}`
+        return `Splunk-DNC-${itemAmount}.template`
       case "clustered":
-        return `Splunk-DC-${amount}`
+        return `Splunk-DC-${itemAmount}.template`
       case "syslog-ng":
-        return `syslog-${amount}`
+        return `syslog-${itemAmount}.template`
       case "mysql-logs":
-        return `mysql-${amount}`
+        return `mysql-${itemAmount}.template`
       case "mssql-logs":
-        return `mssql-${amount}`
+        return `mssql-${itemAmount}.template`
       case "windows-ad-dns":
-        return `winadns-${amount}`
+        return `winadns-${itemAmount}.template`
       case "linux-data-sources":
-        return `linux-${amount}`
+        return `linux-${itemAmount}.template`
+      case "ossec":
+        return `ossec-${itemAmount}.template`
+      case "jenkins":
+        return `jenkins-${itemAmount}.template`
+      // Removed "all-security-data-sources" case
       default:
-        return `package-${amount}`
+        return `package-${itemAmount}.template`
     }
   }
-
-  const isSplunkPackage = (envId: string): boolean => {
-    return ["standalone", "distributed", "clustered"].includes(envId)
-  }
-
-  const environmentName = getEnvironmentName(packageDetails.envId, amount)
-  const splunkPackage = isSplunkPackage(packageDetails.envId)
 
   // Lock body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
-      // Store original overflow
       const originalOverflow = document.body.style.overflow
       const originalPaddingRight = document.body.style.paddingRight
 
-      // Lock body scroll
       document.body.style.overflow = "hidden"
       document.body.style.paddingRight = "0px"
 
-      // Prevent wheel events on body when modal is open
       const preventBodyScroll = (e: WheelEvent) => {
         const target = e.target as Element
         const modalContent = document.querySelector("[data-modal-content]")
 
-        // If the scroll is happening outside the modal content, prevent it
         if (modalContent && !modalContent.contains(target)) {
           e.preventDefault()
           e.stopPropagation()
         }
       }
 
-      // Prevent touch scroll on body
       const preventTouchScroll = (e: TouchEvent) => {
         const target = e.target as Element
         const modalContent = document.querySelector("[data-modal-content]")
@@ -135,16 +137,13 @@ export function RazorpayCheckout({
         }
       }
 
-      // Add event listeners
       document.addEventListener("wheel", preventBodyScroll, { passive: false })
       document.addEventListener("touchmove", preventTouchScroll, { passive: false })
 
       return () => {
-        // Restore original styles
         document.body.style.overflow = originalOverflow
         document.body.style.paddingRight = originalPaddingRight
 
-        // Remove event listeners
         document.removeEventListener("wheel", preventBodyScroll)
         document.removeEventListener("touchmove", preventTouchScroll)
       }
@@ -152,7 +151,6 @@ export function RazorpayCheckout({
   }, [isOpen])
 
   useEffect(() => {
-    // Reset form fields when dialog opens
     if (isOpen) {
       setUserName("")
       setUserEmail("")
@@ -170,14 +168,12 @@ export function RazorpayCheckout({
       return
     }
 
-    // Check Splunk-specific fields based on the new logic
-    if (splunkPackage) {
+    if (hasSplunkPackage) {
       if (!splunkInstall) {
         setFormError("Please fill in the Splunk Installation field.")
         return
       }
-      // Only require BotsV3 Dataset if it's NOT a clustered package
-      if (packageDetails.envId !== "clustered" && !botsv3Dataset) {
+      if (!hasClusteredSplunkPackage && !botsv3Dataset) {
         setFormError("Please fill in the BotsV3 Dataset field.")
         return
       }
@@ -186,7 +182,6 @@ export function RazorpayCheckout({
     setLoading(true)
 
     try {
-      // Create order on your backend
       const orderResponse = await fetch("/api/razorpay/create-order", {
         method: "POST",
         headers: {
@@ -202,26 +197,31 @@ export function RazorpayCheckout({
 
       const order = await orderResponse.json()
 
+      const allComponents = packageDetails?.items.flatMap((item) => item.components || []) || []
+      const uniqueComponents = Array.from(new Set(allComponents))
+
       const notes: any = {
-        environment: environmentName,
-        name: userName, // Added name to notes
+        environment: packageDetails?.items.map((item) => getEnvironmentName(item.id, item.amount)).join("; ") || "N/A",
+        name: userName,
+        cart_items_summary:
+          packageDetails?.items.map((item) => `${item.title} (₹${item.amount}, ${item.hours}h)`).join("; ") || "N/A",
+        cart_components_summary: uniqueComponents.length > 0 ? uniqueComponents.join(", ") : "N/A",
       }
 
-      if (splunkPackage) {
+      if (hasSplunkPackage) {
         notes.splunk_install = splunkInstall
-        // Only add botsv3_dataset if it's not a clustered package
-        if (packageDetails.envId !== "clustered") {
+        if (!hasClusteredSplunkPackage) {
           notes.botsv3_dataset = botsv3Dataset
         }
       }
 
       const options: RazorpayOptions = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_your_key_id", // Replace with your Razorpay key
-        amount: amount * 100, // Amount in paise
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_your_key_id",
+        amount: amount * 100,
         currency: "INR",
         name: "Splunk Lab Environments",
-        description: `${packageDetails.envTitle} - ${environmentName}`,
-        order_id: order.id, // Pass the order ID from your backend
+        description: packageDetails?.envTitle || "Selected Lab Packages",
+        order_id: order.id,
         prefill: {
           name: userName,
           email: userEmail,
@@ -240,16 +240,16 @@ export function RazorpayCheckout({
               phone: userPhone,
               splunk_install: splunkInstall,
               botsv3_dataset: botsv3Dataset,
-              environment: environmentName,
+              environment: notes.environment, // Use the combined environment name
             },
           })
           setLoading(false)
-          onClose() // Close the custom dialog after Razorpay opens
+          onClose()
         },
         modal: {
           ondismiss: () => {
             setLoading(false)
-            onClose() // Close the custom dialog if Razorpay modal is dismissed
+            onClose()
           },
         },
       }
@@ -258,7 +258,7 @@ export function RazorpayCheckout({
       rzp.on("payment.failed", (response: any) => {
         onError(response.error)
         setLoading(false)
-        onClose() // Close the custom dialog if payment fails
+        onClose()
       })
       rzp.open()
     } catch (err: any) {
@@ -288,16 +288,13 @@ export function RazorpayCheckout({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Premium Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Premium Modal Container */}
       <div
         className="relative w-[95vw] max-w-lg mx-auto bg-gradient-to-br from-white via-white to-gray-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 max-h-[90vh] flex flex-col overflow-hidden"
         onWheel={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       >
-        {/* Premium Header with Close Button */}
         <div className="relative bg-gradient-to-r from-green-50 to-emerald-50 dark:from-gray-800 dark:to-gray-700 p-6 pb-4 border-b border-green-100 dark:border-gray-600">
           <button
             onClick={onClose}
@@ -307,7 +304,6 @@ export function RazorpayCheckout({
           </button>
 
           <div className="text-center pr-12">
-            {/* Minimalistic Tracker UI */}
             <div className="flex justify-center items-center gap-2 mb-4">
               <div
                 className={`w-3 h-3 rounded-full transition-colors duration-300 ${
@@ -329,12 +325,10 @@ export function RazorpayCheckout({
           </div>
         </div>
 
-        {/* Premium Scrollable Content */}
         <div
           data-modal-content
           className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-green-200 scrollbar-track-transparent hover:scrollbar-thumb-green-300 p-6"
           onWheel={(e) => {
-            // Allow scrolling within this container
             e.stopPropagation()
           }}
         >
@@ -389,7 +383,7 @@ export function RazorpayCheckout({
               />
             </div>
 
-            {splunkPackage && (
+            {hasSplunkPackage && (
               <>
                 <div className="space-y-2">
                   <Label
@@ -416,7 +410,7 @@ export function RazorpayCheckout({
                   </Select>
                 </div>
 
-                {packageDetails.envId !== "clustered" && ( // ✅ Updated condition: Show if NOT 'clustered'
+                {!hasClusteredSplunkPackage && (
                   <div className="space-y-2">
                     <Label
                       htmlFor="botsv3-dataset"
@@ -444,23 +438,9 @@ export function RazorpayCheckout({
                 )}
               </>
             )}
-
-            {/* Environment Name is now hidden from UI */}
-            {/* <div className="space-y-2">
-              <Label htmlFor="environment" className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Environment Name
-              </Label>
-              <Input
-                id="environment"
-                readOnly
-                value={environmentName}
-                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 text-gray-600 dark:text-gray-300 cursor-not-allowed"
-              />
-            </div> */}
           </div>
         </div>
 
-        {/* Premium Footer */}
         <div className="flex-shrink-0 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-700 border-t border-gray-200 dark:border-gray-600 p-6">
           {formError && (
             <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -471,11 +451,11 @@ export function RazorpayCheckout({
           <div className="flex flex-col sm:flex-row justify-end gap-3">
             <Button
               variant="outline"
-              onClick={onPreviousStep} // Changed to go to previous step
+              onClick={onPreviousStep}
               disabled={loading}
               className="w-full sm:w-auto px-8 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 font-semibold"
             >
-              Previous {/* Changed button text */}
+              Previous
             </Button>
             <Button
               onClick={handleProceed}
