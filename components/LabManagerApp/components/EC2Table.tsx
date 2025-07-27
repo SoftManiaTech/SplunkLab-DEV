@@ -1,66 +1,71 @@
-"use client";
+"use client"
 
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { Copy, Loader2, RefreshCcw } from "lucide-react";
-import { logToSplunk } from "@/lib/splunklogger";
+import React from "react"
+import { useEffect, useState } from "react"
+import axios from "axios"
+import { Copy, Loader2, RefreshCcw, ChevronDown, ChevronUp } from "lucide-react" // Import Chevron icons
+import { logToSplunk } from "@/lib/splunklogger"
 
 interface EC2Instance {
-  Name: string;
-  InstanceId: string;
-  State: string;
-  PrivateIp: string;
-  PublicIp: string;
-  SSHCommand: string;
-  Region: string;
-  ServiceType: string;
+  Name: string
+  InstanceId: string
+  State: string
+  PrivateIp: string
+  PublicIp: string
+  SSHCommand: string
+  Region: string
+  ServiceType: string
 }
 
 interface EC2TableProps {
-  email: string;
-  instances: EC2Instance[];
-  setInstances: React.Dispatch<React.SetStateAction<EC2Instance[]>>;
-  loading: boolean;
+  email: string
+  instances: EC2Instance[]
+  setInstances: React.Dispatch<React.SetStateAction<EC2Instance[]>>
+  loading: boolean
 }
 
-const EC2Table: React.FC<EC2TableProps> = ({
-  email,
-  instances,
-  setInstances,
-  loading,
-}) => {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
+const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loading }) => {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL as string
 
-  const [disabledButtons, setDisabledButtons] = useState<
-    Record<string, boolean>
-  >({});
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [loadingAction, setLoadingAction] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [disabledButtons, setDisabledButtons] = useState<Record<string, boolean>>({})
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [loadingAction, setLoadingAction] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState<boolean>(false)
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({}) // State to manage expanded rows
 
-  const isCooldown = (instanceId: string, action: string) =>
-    disabledButtons[`${instanceId}_${action}`];
+  // Effect to set initial expanded state for specific service types
+  useEffect(() => {
+    const initialExpandedState: Record<string, boolean> = {}
+    instances.forEach((instance) => {
+      if (["MYSQL", "Jenkins", "MSSQL", "OSSEC"].includes(instance.Name)) {
+        initialExpandedState[instance.InstanceId] = true
+      }
+    })
+    setExpandedRows(initialExpandedState)
+  }, [instances]) // Re-run when instances change
+
+  const isCooldown = (instanceId: string, action: string) => disabledButtons[`${instanceId}_${action}`]
 
   const handleButtonClick = async (action: string, instanceId: string) => {
-    const key = `${instanceId}_${action}`;
-    setDisabledButtons((prev) => ({ ...prev, [key]: true }));
-    setLoadingAction(key);
+    const key = `${instanceId}_${action}`
+    setDisabledButtons((prev) => ({ ...prev, [key]: true }))
+    setLoadingAction(key)
 
-    await callAction(action, instanceId);
+    await callAction(action, instanceId)
 
     setTimeout(() => {
       setDisabledButtons((prev) => {
-        const newState = { ...prev };
-        delete newState[key];
-        return newState;
-      });
-      setLoadingAction(null);
-    }, 5000);
-  };
+        const newState = { ...prev }
+        delete newState[key]
+        return newState
+      })
+      setLoadingAction(null)
+    }, 5000)
+  }
 
   const callAction = async (action: string, instanceId: string) => {
-    const instance = instances.find((inst) => inst.InstanceId === instanceId);
-    if (!instance) return;
+    const instance = instances.find((inst) => inst.InstanceId === instanceId)
+    if (!instance) return
 
     try {
       await axios.post(
@@ -75,8 +80,8 @@ const EC2Table: React.FC<EC2TableProps> = ({
         },
         {
           headers: { "x-user-email": email },
-        }
-      );
+        },
+      )
 
       const res = await axios.post(
         "/api/lab-proxy",
@@ -86,8 +91,8 @@ const EC2Table: React.FC<EC2TableProps> = ({
         },
         {
           headers: { "x-user-email": email },
-        }
-      );
+        },
+      )
 
       // ✅ Log to Splunk
       await logToSplunk({
@@ -98,49 +103,49 @@ const EC2Table: React.FC<EC2TableProps> = ({
           instance_name: instance.Name,
           public_ip: instance.PublicIp || "N/A",
         },
-      });
+      })
 
-      await fetchInstances();
+      await fetchInstances()
     } catch (error) {
-      console.error(`Action ${action} failed:`, error);
+      console.error(`Action ${action} failed:`, error)
     }
-  };
+  }
 
   const fetchInstances = async () => {
     try {
-      setRefreshing(true);
+      setRefreshing(true)
       const res = await axios.get(`${apiUrl}/instances`, {
         headers: { Authorization: `Bearer ${email}` },
-      });
-      setInstances(res.data);
+      })
+      setInstances(res.data)
 
       // ✅ Log refresh event
       await logToSplunk({
         session: email,
         action: "lab_instance_refresh",
         details: { total_instances: res.data.length },
-      });
+      })
     } catch (error) {
-      console.error("Error fetching instances:", error);
+      console.error("Error fetching instances:", error)
     } finally {
-      setRefreshing(false);
+      setRefreshing(false)
     }
-  };
+  }
 
   useEffect(() => {
     if (email) {
       const interval = setInterval(() => {
-        fetchInstances();
-      }, 30000);
-      return () => clearInterval(interval);
+        fetchInstances()
+      }, 30000)
+      return () => clearInterval(interval)
     }
-  }, [email]);
+  }, [email])
 
   const handleCopy = (text: string, fieldId: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(fieldId);
-    setTimeout(() => setCopiedField(null), 1500);
-  };
+    navigator.clipboard.writeText(text)
+    setCopiedField(fieldId)
+    setTimeout(() => setCopiedField(null), 1500)
+  }
 
   const renderCopyField = (text: string, fieldId: string) => (
     <div
@@ -184,7 +189,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
         </div>
       )}
     </div>
-  );
+  )
 
   const baseStyle: React.CSSProperties = {
     padding: "6px 14px",
@@ -197,12 +202,9 @@ const EC2Table: React.FC<EC2TableProps> = ({
     fontFamily: "Inter, sans-serif",
     color: "white",
     whiteSpace: "nowrap",
-  };
+  }
 
-  const actionStyles: Record<
-    string,
-    { backgroundColor: string; hover: string }
-  > = {
+  const actionStyles: Record<string, { backgroundColor: string; hover: string }> = {
     start: {
       backgroundColor: "#10b981",
       hover: "#059669",
@@ -215,21 +217,19 @@ const EC2Table: React.FC<EC2TableProps> = ({
       backgroundColor: "#f59e0b",
       hover: "#d97706",
     },
-  };
+  }
 
   const renderButton = (label: string, action: string, instanceId: string) => {
-    const key = `${instanceId}_${action}`;
-    const disabled = isCooldown(instanceId, action);
-    const isLoading = loadingAction === key;
+    const key = `${instanceId}_${action}`
+    const disabled = isCooldown(instanceId, action)
+    const isLoading = loadingAction === key
 
     return (
       <button
         onClick={() => handleButtonClick(action, instanceId)}
         style={{
           ...baseStyle,
-          backgroundColor: disabled
-            ? "#9ca3af"
-            : actionStyles[action].backgroundColor,
+          backgroundColor: disabled ? "#9ca3af" : actionStyles[action].backgroundColor,
           cursor: disabled ? "not-allowed" : "pointer",
           opacity: disabled ? 0.6 : 1,
           display: "inline-flex",
@@ -239,21 +239,26 @@ const EC2Table: React.FC<EC2TableProps> = ({
         disabled={disabled}
         onMouseEnter={(e) => {
           if (!disabled) {
-            (e.target as HTMLButtonElement).style.backgroundColor =
-              actionStyles[action].hover;
+            ;(e.target as HTMLButtonElement).style.backgroundColor = actionStyles[action].hover
           }
         }}
         onMouseLeave={(e) => {
           if (!disabled) {
-            (e.target as HTMLButtonElement).style.backgroundColor =
-              actionStyles[action].backgroundColor;
+            ;(e.target as HTMLButtonElement).style.backgroundColor = actionStyles[action].backgroundColor
           }
         }}
       >
         {isLoading ? <Loader2 size={14} className="animate-spin" /> : label}
       </button>
-    );
-  };
+    )
+  }
+
+  const toggleRowExpansion = (instanceId: string) => {
+    setExpandedRows((prev) => ({
+      ...prev,
+      [instanceId]: !prev[instanceId],
+    }))
+  }
 
   if (loading && instances.length === 0) {
     return (
@@ -261,18 +266,15 @@ const EC2Table: React.FC<EC2TableProps> = ({
         <Loader2 size={20} className="animate-spin mr-2 text-gray-500" />
         <span className="text-gray-700 font-medium">Loading...</span>
       </div>
-    );
+    )
   }
 
-  const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>(
-    (acc, inst) => {
-      const key = inst.ServiceType || "Unknown";
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(inst);
-      return acc;
-    },
-    {}
-  );
+  const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>((acc, inst) => {
+    const key = inst.ServiceType || "Unknown"
+    if (!acc[key]) acc[key] = []
+    acc[key].push(inst)
+    return acc
+  }, {})
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -282,30 +284,22 @@ const EC2Table: React.FC<EC2TableProps> = ({
           onClick={fetchInstances}
           disabled={refreshing}
           className={`p-2 rounded-full ${
-            refreshing
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-amber-500 hover:bg-amber-600 text-gray-700"
+            refreshing ? "bg-gray-400 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600 text-gray-700"
           } text-white`}
           title="Refresh"
         >
-          <RefreshCcw
-            className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
-          />
+          <RefreshCcw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
         </button>
       </div>
 
       {/* 🔽 Split by ServiceType */}
-      {Object.entries(
-        instances.reduce((grouped, inst) => {
-          const group = inst.ServiceType || "Unknown";
-          if (!grouped[group]) grouped[group] = [];
-          grouped[group].push(inst);
-          return grouped;
-        }, {} as Record<string, EC2Instance[]>)
-      ).map(([serviceType, instanceGroup]) => (
+      {Object.entries(groupedInstances).map(([serviceType, instanceGroup]) => (
         <div key={serviceType} style={{ marginBottom: 40 }}>
           <h3 className="text-md font-semibold text-green-600 mb-2">
             {serviceType} Servers
+            {serviceType === "Splunk" && (
+              <span className="text-gray-500 text-sm font-normal ml-2">(username: admin, password: admin123)</span>
+            )}
           </h3>
 
           <div
@@ -337,78 +331,117 @@ const EC2Table: React.FC<EC2TableProps> = ({
               </thead>
               <tbody>
                 {instanceGroup.map((inst) => {
-                  const state = inst.State.toLowerCase();
-                  const isStopped = state === "stopped";
-                  const isRunning = state === "running";
-                  const isMutedState = ["pending", "starting"].includes(state);
-                  const isBusyState = [
-                    "pending",
-                    "starting",
-                    "stopping",
-                    "rebooting",
-                  ].includes(state);
+                  const state = inst.State.toLowerCase()
+                  const isStopped = state === "stopped"
+                  const isRunning = state === "running"
+                  const isMutedState = ["pending", "starting"].includes(state)
+                  const isBusyState = ["pending", "starting", "stopping", "rebooting"].includes(state)
+                  const isExpanded = expandedRows[inst.InstanceId]
+                  const showToggle = ["MYSQL", "Jenkins", "MSSQL", "OSSEC"].includes(inst.Name) // Show toggle for these names
 
                   return (
-                    <tr
-                      key={inst.InstanceId}
-                      style={{ borderTop: "1px solid #e5e7eb" }}
-                    >
-                      <td style={{ padding: "10px" }}>{inst.Name}</td>
-                      <td
-                        style={{
-                          padding: "10px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                        }}
-                      >
-                        {inst.State}
-                        {isBusyState && (
-                          <Loader2
-                            size={14}
-                            className="animate-spin text-gray-500"
-                          />
-                        )}
-                      </td>
-                      <td style={{ padding: "10px" }}>
-                        {inst.PrivateIp
-                          ? renderCopyField(
-                              inst.PrivateIp,
-                              `${inst.InstanceId}_private`
-                            )
-                          : "-"}
-                      </td>
-                      <td style={{ padding: "10px" }}>
-                        {inst.PublicIp
-                          ? renderCopyField(
-                              inst.PublicIp,
-                              `${inst.InstanceId}_public`
-                            )
-                          : "-"}
-                      </td>
-                      <td style={{ padding: "10px" }}>
-                        {inst.State === "running" &&
-                        inst.PublicIp &&
-                        inst.SSHCommand
-                          ? renderCopyField(
-                              inst.SSHCommand,
-                              `${inst.InstanceId}_ssh`
-                            )
-                          : "-"}
-                      </td>
-                      <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
-                        {!isMutedState &&
-                          isStopped &&
-                          renderButton("Start", "start", inst.InstanceId)}
-                        {!isMutedState && isRunning && (
-                          <>
-                            {renderButton("Stop", "stop", inst.InstanceId)}
-                            {renderButton("Reboot", "reboot", inst.InstanceId)}
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  );
+                    <React.Fragment key={inst.InstanceId}>
+                      <tr style={{ borderTop: "1px solid #e5e7eb" }}>
+                        <td style={{ padding: "10px" }}>
+                          <div className="flex items-center gap-2">
+                            <span>{inst.Name}</span>
+                            {showToggle && (
+                              <button
+                                onClick={() => toggleRowExpansion(inst.InstanceId)}
+                                className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+                                aria-expanded={isExpanded}
+                                aria-controls={`details-${inst.InstanceId}`}
+                              >
+                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          {inst.State}
+                          {isBusyState && <Loader2 size={14} className="animate-spin text-gray-500" />}
+                        </td>
+                        <td style={{ padding: "10px" }}>
+                          {inst.PrivateIp ? renderCopyField(inst.PrivateIp, `${inst.InstanceId}_private`) : "-"}
+                        </td>
+                        <td style={{ padding: "10px" }}>
+                          {inst.PublicIp ? renderCopyField(inst.PublicIp, `${inst.InstanceId}_public`) : "-"}
+                        </td>
+                        <td style={{ padding: "10px" }}>
+                          {inst.State === "running" && inst.PublicIp && inst.SSHCommand
+                            ? renderCopyField(inst.SSHCommand, `${inst.InstanceId}_ssh`)
+                            : "-"}
+                        </td>
+                        <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                          {!isMutedState && isStopped && renderButton("Start", "start", inst.InstanceId)}
+                          {!isMutedState && isRunning && (
+                            <>
+                              {renderButton("Stop", "stop", inst.InstanceId)}
+                              {renderButton("Reboot", "reboot", inst.InstanceId)}
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr id={`details-${inst.InstanceId}`} className="bg-gray-50 dark:bg-gray-800">
+                          <td colSpan={6} style={{ padding: "10px 10px 10px 20px" }}>
+                            <div className="text-xs text-gray-700 dark:text-gray-300 flex flex-wrap gap-x-4 gap-y-1">
+                              {inst.Name === "MYSQL" && (
+                                <>
+                                  <span>
+                                    <strong>Root Password:</strong> Admin@123!
+                                  </span>
+                                  <span>
+                                    <strong>Splunk User:</strong> admin
+                                  </span>
+                                  <span>
+                                    <strong>Splunk Password:</strong> Admin@123!
+                                  </span>
+                                </>
+                              )}
+                              {inst.Name === "Jenkins" && (
+                                <>
+                                  <span>
+                                    <strong>Admin Username:</strong> admin
+                                  </span>
+                                  <span>
+                                    <strong>Admin Password:</strong> admin123
+                                  </span>
+                                </>
+                              )}
+                              {inst.Name === "MSSQL" && (
+                                <>
+                                  <span>
+                                    <strong>Root Password:</strong> Admin@123!
+                                  </span>
+                                  <span>
+                                    <strong>User Password:</strong> Admin@123!
+                                  </span>
+                                </>
+                              )}
+                              {inst.Name === "OSSEC" && (
+                                <>
+                                  <span>
+                                    <strong>Admin User:</strong> admin
+                                  </span>
+                                  <span>
+                                    <strong>Admin Password:</strong> admin123
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  )
                 })}
               </tbody>
             </table>
@@ -416,7 +449,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
         </div>
       ))}
     </div>
-  );
-};
+  )
+}
 
-export default EC2Table;
+export default EC2Table
