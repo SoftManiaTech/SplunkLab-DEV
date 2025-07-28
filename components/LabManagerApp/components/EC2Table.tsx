@@ -21,7 +21,7 @@ interface EC2TableProps {
   email: string
   instances: EC2Instance[]
   setInstances: React.Dispatch<React.SetStateAction<EC2Instance[]>>
-  loading: boolean
+  loading: boolean // Keep loading prop, but its usage changes
 }
 
 const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loading }) => {
@@ -133,13 +133,10 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
   }
 
   useEffect(() => {
-    if (email) {
-      const interval = setInterval(() => {
-        fetchInstances()
-      }, 30000)
-      return () => clearInterval(interval)
-    }
-  }, [email])
+    // This useEffect previously contained the setInterval for auto-refresh.
+    // It has been removed to stop automatic refreshing.
+    // Instances will now only refresh on manual button click or initial load.
+  }, [email]) // Removed `email` from dependency array as it's not used for interval anymore
 
   const handleCopy = (text: string, fieldId: string) => {
     navigator.clipboard.writeText(text)
@@ -260,14 +257,15 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     }))
   }
 
-  if (loading && instances.length === 0) {
-    return (
-      <div className="flex justify-center items-center py-20">
-        <Loader2 size={20} className="animate-spin mr-2 text-gray-500" />
-        <span className="text-gray-700 font-medium">Loading...</span>
-      </div>
-    )
-  }
+  // Removed the internal loading check as it's now handled by the parent component
+  // if (loading && instances.length === 0) {
+  //   return (
+  //     <div className="flex justify-center items-center py-20">
+  //       <Loader2 size={20} className="animate-spin mr-2 text-gray-500" />
+  //       <span className="text-gray-700 font-medium">Loading...</span>
+  //     </div>
+  //   )
+  // }
 
   const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>((acc, inst) => {
     const key = inst.ServiceType || "Unknown"
