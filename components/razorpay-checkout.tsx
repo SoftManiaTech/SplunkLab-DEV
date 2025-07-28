@@ -21,7 +21,7 @@ interface RazorpayOptions {
     contact: string
   }
   notes: {
-    environment: string
+    environment: string // This will now be a JSON string of the array
     splunk_install?: string
     botsv3_dataset?: string
     name?: string // Added name to notes
@@ -200,8 +200,11 @@ export function RazorpayCheckout({
       const allComponents = packageDetails?.items.flatMap((item) => item.components || []) || []
       const uniqueComponents = Array.from(new Set(allComponents))
 
+      // Generate the array of environment templates
+      const environmentTemplates = packageDetails?.items.map((item) => getEnvironmentName(item.id, item.amount)) || []
+
       const notes: any = {
-        environment: packageDetails?.items.map((item) => getEnvironmentName(item.id, item.amount)).join("; ") || "N/A",
+        environment: JSON.stringify(environmentTemplates), // Send as JSON string to Razorpay
         name: userName,
         cart_items_summary:
           packageDetails?.items.map((item) => `${item.title} (₹${item.amount}, ${item.hours}h)`).join("; ") || "N/A",
@@ -240,7 +243,7 @@ export function RazorpayCheckout({
               phone: userPhone,
               splunk_install: splunkInstall,
               botsv3_dataset: botsv3Dataset,
-              environment: notes.environment, // Use the combined environment name
+              environment: environmentTemplates, // Pass the actual array here
             },
           })
           setLoading(false)
