@@ -257,22 +257,19 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     }))
   }
 
-  // Removed the internal loading check as it's now handled by the parent component
-  // if (loading && instances.length === 0) {
-  //   return (
-  //     <div className="flex justify-center items-center py-20">
-  //       <Loader2 size={20} className="animate-spin mr-2 text-gray-500" />
-  //       <span className="text-gray-700 font-medium">Loading...</span>
-  //     </div>
-  //   )
-  // }
-
   const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>((acc, inst) => {
     const key = inst.ServiceType || "Unknown"
     if (!acc[key]) acc[key] = []
     acc[key].push(inst)
     return acc
   }, {})
+
+  // Order the service types: Splunk first, then others
+  const orderedServiceTypes = Object.keys(groupedInstances).sort((a, b) => {
+    if (a === "Splunk") return -1 // Splunk comes first
+    if (b === "Splunk") return 1 // Splunk comes first
+    return 0 // Maintain original order for others
+  })
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -291,7 +288,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
       </div>
 
       {/* 🔽 Split by ServiceType */}
-      {Object.entries(groupedInstances).map(([serviceType, instanceGroup]) => (
+      {orderedServiceTypes.map((serviceType) => (
         <div key={serviceType} style={{ marginBottom: 40 }}>
           <h3 className="text-md font-semibold text-green-600 mb-2">
             {serviceType} Servers
@@ -328,7 +325,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                 </tr>
               </thead>
               <tbody>
-                {instanceGroup.map((inst) => {
+                {groupedInstances[serviceType].map((inst) => {
                   const state = inst.State.toLowerCase()
                   const isStopped = state === "stopped"
                   const isRunning = state === "running"
