@@ -454,7 +454,7 @@ export function LabPricingModels({ onAddToCart, cartItems, onSplunkConflict }: L
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0 sm:ml-auto">
                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {isExpanded ? "Expanded" : "Collapsed"}
+                    {isExpanded ? "More Details" : "More Details"}
                   </span>
                   <Switch
                     checked={isExpanded}
