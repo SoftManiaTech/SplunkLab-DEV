@@ -63,9 +63,9 @@ const pricingCategories: PricingCategory[] = [
         subtitle: "Perfect for Learning",
         icon: <Server className="w-6 h-6" />,
         features: [
-          "Pre-configured Splunk instance (optional)",
-          "BOTSv3 – Real-world logs with Splunk tutorial data. (optional)",
-          "Supporting Add-ons for seamless data ingestion. (optional)",
+          "Pre-configured Splunk instance (Free)",
+          "BOTSv3 – Real-world logs with Splunk tutorial data. (Free)",
+          "Supporting Add-ons for seamless data ingestion. (Free)",
         ],
         info: [
           "(OS: Red Hat-9.6) (RAM: 4 GB) (vCPUs: 2)",
@@ -96,7 +96,7 @@ const pricingCategories: PricingCategory[] = [
         features: [
           "4-component architecture",
           "Distributed search capabilities",
-          "BOTSv3 – Real-world logs with Splunk tutorial data. (optional)",
+          "BOTSv3 – Real-world logs with Splunk tutorial data. (Free)",
         ],
         info: [
           "(OS: Red Hat-9.6) (RAM: 4 GB) (vCPUs: 2)",

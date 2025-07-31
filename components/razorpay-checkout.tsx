@@ -393,7 +393,7 @@ export function RazorpayCheckout({
                     htmlFor="splunk-install"
                     className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
                   >
-                    Splunk Installation <span className="text-red-500 ml-1">*</span>
+                    Splunk Installation <span className="text-red-500 ml-1">*</span> <span className="text-gray-500 ml-1">(Free)</span>
                   </Label>
                   <Select value={splunkInstall} onValueChange={(value: "yes" | "no") => setSplunkInstall(value)}>
                     <SelectTrigger
@@ -419,7 +419,7 @@ export function RazorpayCheckout({
                       htmlFor="botsv3-dataset"
                       className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
                     >
-                      BotsV3 Dataset <span className="text-red-500 ml-1">*</span>
+                      BotsV3 Dataset <span className="text-red-500 ml-1">*</span> <span className="text-gray-500 ml-1">(Free)</span>
                     </Label>
                     <Select value={botsv3Dataset} onValueChange={(value: "yes" | "no") => setBotsv3Dataset(value)}>
                       <SelectTrigger
