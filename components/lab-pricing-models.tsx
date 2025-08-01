@@ -798,7 +798,7 @@ export function LabPricingModels({ onAddToCart, cartItems, onSplunkConflict }: L
     return selectedPricingOption[envId]
   }
 
-  const renderEnvironmentCard = (env: EnvironmentOption) => (
+  const renderEnvironmentCard = (env: EnvironmentOption, categoryIsExpanded: boolean) => (
     <Card
       key={env.id || env.title || "environment"}
       className={cn(
@@ -839,47 +839,49 @@ export function LabPricingModels({ onAddToCart, cartItems, onSplunkConflict }: L
         {!env.isComingSoon && (
           <>
             {/* Key Features Section */}
-            <div
-              onClick={(e) => {
-                e.stopPropagation()
-                toggleFeatures(env.id || "")
-              }}
-              className="cursor-pointer"
-            >
-              <button className="w-full text-left flex items-center justify-between text-sm font-semibold text-gray-900 dark:text-white mb-3 hover:text-green-600 transition-colors duration-200">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                  Key Features
-                </div>
-                {expandedFeatures[env.id || ""] ? (
-                  <ChevronUp className="w-4 h-4 text-gray-500" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-gray-500" />
-                )}
-              </button>
-
+            {categoryIsExpanded && (
               <div
-                className={cn(
-                  "space-y-2 transition-all duration-300 ease-in-out",
-                  expandedFeatures[env.id || ""] ? "max-h-[1000px]" : "max-h-24 overflow-hidden relative",
-                  !expandedFeatures[env.id || ""] &&
-                    "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-12 after:bg-gradient-to-t after:from-white after:to-transparent dark:after:from-gray-900 dark:after:to-transparent after:pointer-events-none",
-                )}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleFeatures(env.id || "")
+                }}
+                className="cursor-pointer"
               >
-                {env.features.map((feature, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                  >
-                    <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
-                    <span>{feature}</span>
+                <button className="w-full text-left flex items-center justify-between text-sm font-semibold text-gray-900 dark:text-white mb-3 hover:text-green-600 transition-colors duration-200">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    Key Features
                   </div>
-                ))}
+                  {expandedFeatures[env.id || ""] ? (
+                    <ChevronUp className="w-4 h-4 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                  )}
+                </button>
+
+                <div
+                  className={cn(
+                    "space-y-2 transition-all duration-300 ease-in-out",
+                    expandedFeatures[env.id || ""] ? "max-h-[1000px]" : "max-h-24 overflow-hidden relative",
+                    !expandedFeatures[env.id || ""] &&
+                      "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-12 after:bg-gradient-to-t after:from-white after:to-transparent dark:after:from-gray-900 dark:after:to-transparent after:pointer-events-none",
+                  )}
+                >
+                  {env.features.map((feature, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+                    >
+                      <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
+                      <span>{feature}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Components Section */}
-            {env.components && env.components.length > 0 && (
+            {categoryIsExpanded && env.components && env.components.length > 0 && (
               <div
                 onClick={(e) => {
                   e.stopPropagation()
@@ -921,42 +923,46 @@ export function LabPricingModels({ onAddToCart, cartItems, onSplunkConflict }: L
             )}
 
             {/* Info Section */}
-            <div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  toggleInfo(env.id || "")
-                }}
-                className="w-full text-left flex items-center justify-between text-sm font-semibold text-gray-900 dark:text-white mb-3 hover:text-green-600 transition-colors duration-200"
-              >
-                <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-600" />
-                  Info
-                </div>
-                {expandedInfo[env.id || ""] ? (
-                  <ChevronUp className="w-4 h-4 text-gray-500" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-gray-500" />
-                )}
-              </button>
-
-              <div
-                className={cn(
-                  "space-y-2 transition-all duration-300 ease-in-out",
-                  expandedInfo[env.id || ""] ? "max-h-[1000px]" : "max-h-0 overflow-hidden",
-                )}
-              >
-                {env.info.map((info, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                  >
-                    <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
-                    <span>{info}</span>
+            {categoryIsExpanded && (
+              <div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleInfo(env.id || "")
+                  }}
+                  className="w-full text-left flex items-center justify-between text-sm font-semibold text-gray-900 dark:text-white mb-3 hover:text-green-600 transition-colors duration-200"
+                >
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-600" />
+                    Info
                   </div>
-                ))}
+                  {expandedInfo[env.id || ""] ? (
+                    <ChevronUp className="w-4 h-4 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                  )}
+                </button>
+
+                <div
+                  className={cn(
+                    "space-y-2 transition-all duration-300 ease-in-out",
+                    expandedInfo[env.id || ""] ? "max-h-[1000px]" : "max-h-24 overflow-hidden relative",
+                    !expandedInfo[env.id || ""] &&
+                      "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-12 after:bg-gradient-to-t after:from-white after:to-transparent dark:after:from-gray-900 dark:after:to-transparent after:pointer-events-none",
+                  )}
+                >
+                  {env.info.map((info, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+                    >
+                      <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
+                      <span>{info}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Pricing Section */}
             <div className="opacity-100">
@@ -1056,7 +1062,7 @@ export function LabPricingModels({ onAddToCart, cartItems, onSplunkConflict }: L
         {pricingCategories.map((category) => {
           const categoryId = category.id
           const isExpanded = isCategoryExpanded[categoryId]
-          const isSecurityDataSources = categoryId === "security-data-sources"
+          const shouldUseCarousel = category.environments.length > 3 // Dynamic check for carousel
 
           return (
             <div key={categoryId} className="mb-12 sm:mb-16 lg:mb-20">
@@ -1074,7 +1080,7 @@ export function LabPricingModels({ onAddToCart, cartItems, onSplunkConflict }: L
                 </div>
                 <div className="flex items-center gap-2 mt-4 sm:mt-0 sm:ml-auto">
                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {isExpanded ? "Expanded" : "Collapsed"}
+                    {isExpanded ? "More Details" : "More Details"}
                   </span>
                   <Switch
                     checked={isExpanded}
@@ -1084,13 +1090,15 @@ export function LabPricingModels({ onAddToCart, cartItems, onSplunkConflict }: L
                 </div>
               </div>
 
-              {/* Render with Carousel for Security Data Sources, Grid for others */}
-              {isSecurityDataSources && isExpanded ? (
-                <Carousel className="px-4">{category.environments.map((env) => renderEnvironmentCard(env))}</Carousel>
-              ) : isExpanded ? (
+              {/* Dynamic rendering: Carousel for >3 cards, Grid for ≤3 cards */}
+              {shouldUseCarousel ? (
+                <Carousel className="px-4">
+                  {category.environments.map((env) => renderEnvironmentCard(env, isExpanded))}
+                </Carousel>
+              ) : (
                 <div className="grid lg:grid-cols-3 gap-8 sm:gap-12">
                   {category.environments.length > 0 ? (
-                    category.environments.map((env) => renderEnvironmentCard(env))
+                    category.environments.map((env) => renderEnvironmentCard(env, isExpanded))
                   ) : (
                     <div className="lg:col-span-3 text-center py-12">
                       <p className="text-gray-500 dark:text-gray-400 text-lg">
@@ -1099,7 +1107,7 @@ export function LabPricingModels({ onAddToCart, cartItems, onSplunkConflict }: L
                     </div>
                   )}
                 </div>
-              ) : null}
+              )}
             </div>
           )
         })}
