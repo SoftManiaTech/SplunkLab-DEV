@@ -393,7 +393,7 @@ export function RazorpayCheckout({
                     htmlFor="splunk-install"
                     className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
                   >
-                    Splunk Installation <span className="text-red-500 ml-1">*</span> <span className="text-gray-500 ml-1">(Free)</span>
+                    Splunk Installation <span className="text-red-500 ml-1">*</span>
                   </Label>
                   <Select value={splunkInstall} onValueChange={(value: "yes" | "no") => setSplunkInstall(value)}>
                     <SelectTrigger
@@ -413,13 +413,22 @@ export function RazorpayCheckout({
                   </Select>
                 </div>
 
+                {hasClusteredSplunkPackage && (
+                  <div className="text-red-500 text-sm font-bold text-center mt-2">
+                    Need Cluster setup? Mail to{" "}
+                    <a href="mailto:labsupport@softmania.in" className="text-blue-600 hover:underline">
+                      labsupport@softmania.in
+                    </a>
+                  </div>
+                )}
+
                 {!hasClusteredSplunkPackage && (
                   <div className="space-y-2">
                     <Label
                       htmlFor="botsv3-dataset"
                       className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center"
                     >
-                      BotsV3 Dataset <span className="text-red-500 ml-1">*</span> <span className="text-gray-500 ml-1">(Free)</span>
+                      BotsV3 Dataset <span className="text-red-500 ml-1">*</span>
                     </Label>
                     <Select value={botsv3Dataset} onValueChange={(value: "yes" | "no") => setBotsv3Dataset(value)}>
                       <SelectTrigger
