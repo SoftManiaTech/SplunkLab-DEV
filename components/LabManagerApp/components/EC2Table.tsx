@@ -44,6 +44,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
   const [selectedInstances, setSelectedInstances] = useState<Set<string>>(new Set()) // State for bulk selection
   const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null) // State for bulk action loading
   const [expandedUsageRows, setExpandedUsageRows] = useState<Record<string, boolean>>({})
+  const [expandedCredentials, setExpandedCredentials] = useState<Record<string, boolean>>({})
 
   // State for password modal
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -106,23 +107,76 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     }))
   }
 
-  // Effect to set initial expanded state for specific service types
+  // Effect to manage expanded states (credentials, usage, and general row expansion)
   useEffect(() => {
-    const initialExpandedState: Record<string, boolean> = {}
-    instances.forEach((instance) => {
-      // For DataSources, expand by default if they have credentials
-      if (instance.ServiceType === "DataSources" && 
-          ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(instance.Name)) {
-        initialExpandedState[instance.InstanceId] = true
+    setExpandedRows(prevExpandedRows => {
+      const newExpandedRows = { ...prevExpandedRows };
+      const currentInstanceIds = new Set(instances.map(inst => inst.InstanceId));
+
+      // Remove instances that no longer exist
+      for (const instanceId in newExpandedRows) {
+        if (!currentInstanceIds.has(instanceId)) {
+          delete newExpandedRows[instanceId];
+        }
       }
-      // For other service types, expand specific ones
-      else if (instance.ServiceType !== "DataSources" && 
-               ["MYSQL", "Jenkins", "MSSQL", "OSSEC"].includes(instance.Name)) {
-        initialExpandedState[instance.InstanceId] = true
+
+      // Add/update default expanded state for current instances
+      instances.forEach((instance) => {
+        const shouldBeExpandedByDefault = 
+          (instance.ServiceType === "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(instance.Name)) ||
+          (instance.ServiceType !== "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC"].includes(instance.Name));
+        
+        // If it should be expanded by default AND it's not already explicitly collapsed by the user
+        if (shouldBeExpandedByDefault && newExpandedRows[instance.InstanceId] !== false) {
+          newExpandedRows[instance.InstanceId] = true;
+        }
+      });
+      return newExpandedRows;
+    });
+
+    setExpandedCredentials(prevExpandedCredentials => {
+      const newExpandedCredentials = { ...prevExpandedCredentials };
+      const currentInstanceIds = new Set(instances.map(inst => inst.InstanceId));
+
+      // Remove instances that no longer exist
+      for (const instanceId in newExpandedCredentials) {
+        if (!currentInstanceIds.has(instanceId)) {
+          delete newExpandedCredentials[instanceId];
+        }
       }
-    })
-    setExpandedRows(initialExpandedState)
-  }, [instances]) // Re-run when instances change
+
+      // Add/update default expanded state for current instances
+      instances.forEach((instance) => {
+        const shouldBeExpandedByDefault = 
+          (instance.ServiceType === "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(instance.Name)) ||
+          (instance.ServiceType !== "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC"].includes(instance.Name));
+        
+        // If it should be expanded by default AND it's not already explicitly collapsed by the user
+        if (shouldBeExpandedByDefault && newExpandedCredentials[instance.InstanceId] !== false) {
+          newExpandedCredentials[instance.InstanceId] = true;
+        }
+      });
+      return newExpandedCredentials;
+    });
+
+    setExpandedUsageRows(prevExpandedUsageRows => {
+      const newExpandedUsageRows = { ...prevExpandedUsageRows };
+      const currentInstanceIds = new Set(instances.map(inst => inst.InstanceId));
+
+      // Remove instances that no longer exist
+      for (const instanceId in newExpandedUsageRows) {
+        if (!currentInstanceIds.has(instanceId)) {
+          delete newExpandedUsageRows[instanceId];
+        }
+      }
+      // For usage, there's no "default expanded" based on instance type,
+      // so we just ensure existing states are preserved and old ones removed.
+      // If a new instance appears, its usage details will be collapsed by default (undefined/false).
+      return newExpandedUsageRows;
+    });
+
+  }, [instances]); // Keep instances as a dependency, but handle state updates functionally.
+
 
   // Load password click state from localStorage on mount
   useEffect(() => {
@@ -546,6 +600,32 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     })
   }
 
+  const handleKeepOnlyRunning = () => {
+    setSelectedInstances(prev => {
+      const newSet = new Set<string>();
+      Array.from(prev).forEach(instanceId => {
+        const instance = instances.find(inst => inst.InstanceId === instanceId);
+        if (instance && instance.State === "running") {
+          newSet.add(instanceId);
+        }
+      });
+      return newSet;
+    });
+  };
+
+  const handleKeepOnlyStopped = () => {
+    setSelectedInstances(prev => {
+      const newSet = new Set<string>();
+      Array.from(prev).forEach(instanceId => {
+        const instance = instances.find(inst => inst.InstanceId === instanceId);
+        if (instance && instance.State === "stopped") {
+          newSet.add(instanceId);
+        }
+      });
+      return newSet;
+    });
+  };
+
   const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>((acc, inst) => {
     const key = inst.ServiceType || "Unknown"
     if (!acc[key]) acc[key] = []
@@ -565,11 +645,20 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
   
   const allSelectedStopped = selectedInstanceDetails.length > 0 && selectedInstanceDetails.every(inst => inst.State === "stopped");
   const allSelectedRunning = selectedInstanceDetails.length > 0 && selectedInstanceDetails.every(inst => inst.State === "running");
+  const hasMixedStates = selectedInstances.size > 0 && (!allSelectedStopped && !allSelectedRunning);
+
 
   const formatFloatHours = (hours: number): string => {
     const h = Math.floor(hours)
     const m = Math.round((hours - h) * 60)
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+  }
+
+  const toggleCredentialExpansion = (instanceId: string) => {
+    setExpandedCredentials((prev) => ({
+      ...prev,
+      [instanceId]: !prev[instanceId],
+    }))
   }
 
   return (
@@ -600,6 +689,22 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
               <>
                 {renderBulkButton("Stop", "stop")}
                 {renderBulkButton("Reboot", "reboot")}
+              </>
+            )}
+            {hasMixedStates && (
+              <>
+                <button
+                  onClick={handleKeepOnlyRunning}
+                  className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600"
+                >
+                  Keep only Running
+                </button>
+                <button
+                  onClick={handleKeepOnlyStopped}
+                  className="px-3 py-1 text-sm bg-orange-500 text-white rounded hover:bg-orange-600"
+                >
+                  Keep only Stopped
+                </button>
               </>
             )}
             <button
@@ -711,7 +816,6 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                     const isRunning = state === "running"
                     const isMutedState = ["pending", "starting"].includes(state)
                     const isBusyState = ["pending", "starting", "stopping", "rebooting"].includes(state)
-                    const isExpanded = expandedRows[inst.InstanceId]
                     const showToggle = ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(inst.Name) // Show toggle for these names
                     const isWindowsADDNS = inst.Name === "Windows(AD&DNS)"
                     const isSelected = selectedInstances.has(inst.InstanceId)
@@ -730,14 +834,14 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                           <td style={{ padding: "10px" }}>
                             <div className="flex items-center gap-2">
                               <span>{inst.Name}</span>
+                              {/* Toggle for general row expansion (credentials) */}
                               {showToggle && (
                                 <button
-                                  onClick={() => toggleRowExpansion(inst.InstanceId)}
+                                  onClick={() => toggleCredentialExpansion(inst.InstanceId)}
                                   className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
-                                  aria-expanded={isExpanded}
-                                  aria-controls={`details-${inst.InstanceId}`}
+                                  title="Toggle Credentials"
                                 >
-                                  {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                  {expandedCredentials[inst.InstanceId] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                 </button>
                               )}
                             </div>
@@ -826,7 +930,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                             )}
                           </td>
                         </tr>
-                        {isExpanded && (
+                        {expandedCredentials[inst.InstanceId] && (
                           <tr id={`details-${inst.InstanceId}`} className="bg-gray-50 dark:bg-gray-800">
                             <td colSpan={showExpiryColumn[serviceType] ? 8 : 7} style={{ padding: "10px 10px 10px 20px" }}>
                               <div className="text-xs text-gray-700 dark:text-gray-300 flex flex-wrap gap-x-4 gap-y-1">
