@@ -52,6 +52,7 @@ function LabManagerClient(): JSX.Element {
   const [pemFiles, setPemFiles] = useState<{ filename: string; url: string }[]>([])
   const [isUsageExpanded, setIsUsageExpanded] = useState(false)
   const [rawUsageSummary, setRawUsageSummary] = useState<any[]>([])
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false) // New state for password modal
 
   const encrypt = (data: string): string => {
     return CryptoJS.AES.encrypt(data, SECRET_KEY).toString()
@@ -281,13 +282,14 @@ function LabManagerClient(): JSX.Element {
 
   useEffect(() => {
     let interval: NodeJS.Timeout
-    if (email && hasLab) {
+    // Pause auto-refresh if password modal is open
+    if (email && hasLab && instances.length > 0 && !isPasswordModalOpen) {
       interval = setInterval(() => {
         fetchInstances(email)
       }, 3000)
     }
     return () => clearInterval(interval)
-  }, [email, hasLab])
+  }, [email, hasLab, instances.length, isPasswordModalOpen]) // Added isPasswordModalOpen as dependency
 
   const handleLogout = () => setShowLogoutModal(true)
 
@@ -307,7 +309,7 @@ function LabManagerClient(): JSX.Element {
 
   return (
     <GoogleOAuthProvider clientId={CLIENT_ID}>
-      <header className="border-b border-gray-100 bg-white/95 sticky top-0 z-40 px-5">
+            <header className="border-b border-gray-100 bg-white/95 sticky top-0 z-40 px-5">
         <div className="flex items-center justify-between py-4">
           {/* Left Side: Logo */}
           <div className="flex items-center gap-3 h-12">
@@ -324,7 +326,6 @@ function LabManagerClient(): JSX.Element {
           <h2 className="text-xl font-extrabold text-gray-800">Lab Manager</h2>
         </div>
       </header>
-
       <div style={{ padding: 20 }}>
         {!email ? (
           <div className="flex flex-col items-center justify-center mt-16">
@@ -374,6 +375,8 @@ function LabManagerClient(): JSX.Element {
               rawUsageSummary={rawUsageSummary}
               fetchUsageSummary={() => fetchUsageSummary(email)} // Pass the function
               isRefreshingUsage={refreshingUsage} // Pass the state
+              hasLab={hasLab} // Add this line
+              onPasswordModalOpenChange={setIsPasswordModalOpen} // Pass the new handler
             />
             {pemFiles.length > 0 && (
               <div className="bg-white shadow-md rounded-2xl p-5 mb-6 border border-gray-200 mt-[10px]">
