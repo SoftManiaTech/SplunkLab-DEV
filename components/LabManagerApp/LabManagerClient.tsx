@@ -307,14 +307,24 @@ function LabManagerClient(): JSX.Element {
 
   return (
     <GoogleOAuthProvider clientId={CLIENT_ID}>
-      <header className="border-b border-gray-100 bg-white/95 sticky top-0 z-40">
-        <div className="container mx-auto py-4 flex items-center justify-between">
-          <Link href="/" passHref>
-            <SoftmaniaLogo size="md" />
-          </Link>
+      <header className="border-b border-gray-100 bg-white/95 sticky top-0 z-40 px-5">
+        <div className="flex items-center justify-between py-4">
+          {/* Left Side: Logo */}
+          <div className="flex items-center gap-3 h-12">
+            <div className="flex flex-col">
+              <span className="text-xl font-bold text-gray-900 dark:text-white font-heading">
+                <Link href="/" passHref>
+                <span className="text-green-600">Soft</span> Mania
+                </Link>
+              </span>
+            </div>
+          </div>
+
+          {/* Right Side: Title */}
           <h2 className="text-xl font-extrabold text-gray-800">Lab Manager</h2>
         </div>
       </header>
+
       <div style={{ padding: 20 }}>
         {!email ? (
           <div className="flex flex-col items-center justify-center mt-16">
