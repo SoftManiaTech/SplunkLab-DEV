@@ -3,7 +3,20 @@
 import React from "react"
 import { useEffect, useState, useCallback } from "react"
 import axios from "axios"
-import { Copy, Loader2, RefreshCcw, ChevronDown, ChevronUp, Key, Eye, EyeOff, Database, Play } from "lucide-react"
+import {
+  Copy,
+  Loader2,
+  RefreshCcw,
+  ChevronDown,
+  ChevronUp,
+  Key,
+  Eye,
+  EyeOff,
+  Database,
+  Play,
+  AlertCircle,
+  MessageCircle,
+} from "lucide-react"
 import { logToSplunk } from "@/lib/splunklogger"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -91,6 +104,14 @@ const EC2Table: React.FC<EC2TableProps> = ({
   // Specific cluster instance freeze state (instead of global)
   const [frozenClusterInstances, setFrozenClusterInstances] = useState<Record<string, number>>({}) // instanceId -> endTime
   const [frozenClusterRemainingTimes, setFrozenClusterRemainingTimes] = useState<Record<string, number>>({})
+
+  // Extend validity modal state
+  const [extendValidityModal, setExtendValidityModal] = useState({
+    isOpen: false,
+    instanceId: "",
+    instanceName: "",
+    endDate: "",
+  })
 
   // Helper function to format milliseconds into MM:SS
   const formatRemainingTime = (ms: number): string => {
@@ -199,6 +220,59 @@ const EC2Table: React.FC<EC2TableProps> = ({
     const endTime = frozenClusterInstances[instanceId]
     if (!endTime) return false
     return Date.now() < endTime
+  }
+
+  // Helper function to calculate notification dot urgency
+  const getNotificationUrgency = (instanceId: string) => {
+    const usageDetails = getInstanceUsageDetails(instanceId)
+    if (!usageDetails) return null
+
+    const now = new Date()
+    const endDate = new Date(usageDetails.plan_end_date)
+    const daysUntilEnd = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    const usagePercentage = (usageDetails.used_hours / usageDetails.quota_hours) * 100
+
+    // Check if we should show notification (2 days before end OR 80% usage)
+    const shouldShowByDate = daysUntilEnd <= 2 && daysUntilEnd >= 0
+    const shouldShowByUsage = usagePercentage >= 80
+
+    if (!shouldShowByDate && !shouldShowByUsage) return null
+
+    // Determine urgency level
+    const isHighUrgency = daysUntilEnd <= 1 || usagePercentage >= 90
+
+    return {
+      level: isHighUrgency ? "high" : "medium",
+      daysUntilEnd,
+      usagePercentage: Math.round(usagePercentage),
+      endDate: usageDetails.plan_end_date,
+    }
+  }
+
+  // Helper function to get notification tooltip text
+  const getNotificationTooltip = (urgency: any) => {
+    if (!urgency) return ""
+
+    const messages = []
+    if (urgency.daysUntilEnd <= 2 && urgency.daysUntilEnd >= 0) {
+      messages.push(`Quota expires in ${urgency.daysUntilEnd} day${urgency.daysUntilEnd !== 1 ? "s" : ""}`)
+    }
+    if (urgency.usagePercentage >= 80) {
+      messages.push(`${urgency.usagePercentage}% quota used`)
+    }
+
+    return `${messages.join(" • ")} - Click to extend validity`
+  }
+
+  // Helper function to handle extend validity
+  const handleExtendValidity = (instanceId: string, instanceName: string) => {
+    const usageDetails = getInstanceUsageDetails(instanceId)
+    setExtendValidityModal({
+      isOpen: true,
+      instanceId,
+      instanceName,
+      endDate: usageDetails?.plan_end_date || "",
+    })
   }
 
   // Effect to manage expanded states
@@ -1170,7 +1244,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
                       </span>
                     )}
                   </h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {clusterInfo.hasComplete && (
                       <button
                         onClick={(e) => {
@@ -1178,11 +1252,12 @@ const EC2Table: React.FC<EC2TableProps> = ({
                           e.stopPropagation()
                           handleClusterConfiguration(serviceInstances)
                         }}
-                        className="flex items-center gap-2 px-3 py-1 text-sm bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 text-white rounded-md transition-all duration-300 shadow-md hover:shadow-lg font-medium"
+                        className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 text-xs sm:text-sm bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 text-white rounded-md transition-all duration-300 shadow-md hover:shadow-lg font-medium"
                         title="Configure Cluster"
                       >
-                        <Database size={16} />
-                        Cluster Config
+                        <Database size={14} className="sm:w-4 sm:h-4" />
+                        <span className="hidden sm:inline">Cluster Config</span>
+                        <span className="sm:hidden">Config</span>
                       </button>
                     )}
                     <button
@@ -1191,11 +1266,16 @@ const EC2Table: React.FC<EC2TableProps> = ({
                         e.stopPropagation()
                         toggleExpiryColumn(serviceType)
                       }}
-                      className="flex items-center gap-2 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                      className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 text-xs sm:text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                       title={`${showExpiryColumn[serviceType] ? "Hide" : "Show"} Expiry`}
                     >
-                      {showExpiryColumn[serviceType] ? <EyeOff size={16} /> : <Eye size={16} />}
-                      Expiry
+                      {showExpiryColumn[serviceType] ? (
+                        <EyeOff size={14} className="sm:w-4 sm:h-4" />
+                      ) : (
+                        <Eye size={14} className="sm:w-4 sm:h-4" />
+                      )}
+                      <span className="hidden sm:inline">Expiry</span>
+                      <span className="sm:hidden">Exp</span>
                     </button>
                     <button
                       onClick={(e) => {
@@ -1209,15 +1289,16 @@ const EC2Table: React.FC<EC2TableProps> = ({
                           }))
                         })
                       }}
-                      className="flex items-center gap-2 px-3 py-1 text-sm bg-blue-100 hover:bg-blue-200 rounded-md transition-colors"
+                      className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 text-xs sm:text-sm bg-blue-100 hover:bg-blue-200 rounded-md transition-colors"
                       title="Toggle Usage Details"
                     >
                       {allUsageRowsExpanded ? (
-                        <EyeOff size={16} className="transition-transform duration-300" />
+                        <EyeOff size={14} className="sm:w-4 sm:h-4 transition-transform duration-300" />
                       ) : (
-                        <Eye size={16} className="transition-transform duration-300" />
+                        <Eye size={14} className="sm:w-4 sm:h-4 transition-transform duration-300" />
                       )}
-                      More Details
+                      <span className="hidden sm:inline">More Details</span>
+                      <span className="sm:hidden">Details</span>
                     </button>
                   </div>
                 </div>
@@ -1291,7 +1372,34 @@ const EC2Table: React.FC<EC2TableProps> = ({
                               </td>
                               <td style={{ padding: "10px" }}>
                                 <div className="flex items-center gap-2">
-                                  <span>{inst.Name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span>{inst.Name}</span>
+                                    {(() => {
+                                      const urgency = getNotificationUrgency(inst.InstanceId)
+                                      if (urgency) {
+                                        return (
+                                          <div
+                                            className={`relative w-3 h-3 rounded-full cursor-pointer animate-pulse ${
+                                              urgency.level === "high" ? "bg-red-500" : "bg-yellow-500"
+                                            }`}
+                                            onClick={(e) => {
+                                              e.preventDefault()
+                                              e.stopPropagation()
+                                              toggleUsageDetails(inst.InstanceId)
+                                            }}
+                                            title={getNotificationTooltip(urgency)}
+                                          >
+                                            <div
+                                              className={`absolute inset-0 rounded-full animate-ping ${
+                                                urgency.level === "high" ? "bg-red-400" : "bg-yellow-400"
+                                              }`}
+                                            />
+                                          </div>
+                                        )
+                                      }
+                                      return null
+                                    })()}
+                                  </div>
                                   {showToggle && (
                                     <button
                                       onClick={(e) => {
@@ -1488,24 +1596,39 @@ const EC2Table: React.FC<EC2TableProps> = ({
                                       <div className="text-sm">
                                         <div className="flex justify-between items-center mb-2">
                                           <h4 className="font-semibold text-blue-800">Usage Summary</h4>
-                                          <button
-                                            onClick={(e) => {
-                                              e.preventDefault()
-                                              e.stopPropagation()
-                                              fetchUsageSummary()
-                                            }}
-                                            disabled={isRefreshingUsage}
-                                            className={`p-1 rounded-full ${
-                                              isRefreshingUsage
-                                                ? "bg-gray-400 cursor-not-allowed"
-                                                : "bg-amber-500 hover:bg-amber-600 text-gray-700"
-                                            } text-white`}
-                                            title="Refresh Usage"
-                                          >
-                                            <RefreshCcw
-                                              className={`w-4 h-4 ${isRefreshingUsage ? "animate-spin" : ""}`}
-                                            />
-                                          </button>
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              onClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                handleExtendValidity(inst.InstanceId, inst.Name)
+                                              }}
+                                              className="flex items-center gap-1 px-2 py-1 text-xs bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 text-white rounded-md transition-all duration-300 shadow-sm hover:shadow-md font-medium"
+                                              title="Extend Validity"
+                                            >
+                                              <AlertCircle size={12} />
+                                              <span className="hidden sm:inline">Extend Validity</span>
+                                              <span className="sm:hidden">Extend</span>
+                                            </button>
+                                            <button
+                                              onClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                fetchUsageSummary()
+                                              }}
+                                              disabled={isRefreshingUsage}
+                                              className={`p-1 rounded-full ${
+                                                isRefreshingUsage
+                                                  ? "bg-gray-400 cursor-not-allowed"
+                                                  : "bg-amber-500 hover:bg-amber-600 text-gray-700"
+                                              } text-white`}
+                                              title="Refresh Usage"
+                                            >
+                                              <RefreshCcw
+                                                className={`w-4 h-4 ${isRefreshingUsage ? "animate-spin" : ""}`}
+                                              />
+                                            </button>
+                                          </div>
                                         </div>
                                         {(usageDetails.balance_hours <= 0 || usageDetails.balance_days <= 0) && (
                                           <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-3 py-1 mb-2 text-sm">
@@ -1855,6 +1978,119 @@ const EC2Table: React.FC<EC2TableProps> = ({
                   </Button>
                 </>
               )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Extend Validity Modal */}
+      <Dialog
+        open={extendValidityModal.isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setExtendValidityModal({
+              isOpen: false,
+              instanceId: "",
+              instanceName: "",
+              endDate: "",
+            })
+          }
+        }}
+      >
+        <DialogContent
+          className="w-[95vw] max-w-md mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 max-h-[90vh] flex flex-col overflow-hidden"
+          onPointerDownOutside={(e) => {
+            e.preventDefault()
+          }}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault()
+          }}
+        >
+          <DialogHeader className="relative bg-gradient-to-r from-yellow-50 to-yellow-100 dark:bg-gray-800 p-6 pb-4 rounded-t-2xl flex-shrink-0">
+            <div className="text-center pr-12">
+              <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white">Extend Validity</DialogTitle>
+              <DialogDescription className="text-gray-600 dark:text-gray-400 text-sm mt-2">
+                Extend your server quota and validity period
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+
+          <div
+            className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent hover:scrollbar-thumb-gray-300 p-6"
+            onWheel={(e) => {
+              e.stopPropagation()
+            }}
+          >
+            <div className="space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">Server Details</h3>
+                <div className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                  <p>
+                    <strong>Server:</strong> {extendValidityModal.instanceName}
+                  </p>
+                  <p>
+                    <strong>Current End Date:</strong> {extendValidityModal.endDate}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <h3 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-2">Quota Increase Options</h3>
+                <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
+                  <p>To extend your server validity, you can:</p>
+                  <ul className="list-disc list-inside ml-2 space-y-1">
+                    <li>Chat with our support team directly on WhatsApp</li>
+                    <li>Request validity extension based on your needs</li>
+                    <li>Pay for additional quota hours to increase your limit</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <h3 className="font-semibold text-green-800 dark:text-green-200 mb-2">Quick Support</h3>
+                <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                  Get instant help from our support team via WhatsApp for quota extension and validity increase.
+                </p>
+                <a
+                  href="https://chat.whatsapp.com/CsWBpBxMyDO3bV2Rz9r39H"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all duration-300 shadow-md hover:shadow-lg font-medium text-sm"
+                  onClick={() => {
+                    logToSplunk({
+                      session: email,
+                      action: "extend_validity_whatsapp_click",
+                      details: {
+                        instance_id: extendValidityModal.instanceId,
+                        instance_name: extendValidityModal.instanceName,
+                        end_date: extendValidityModal.endDate,
+                      },
+                    })
+                  }}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Chat on WhatsApp
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-shrink-0 bg-white dark:bg-gray-900 p-6 rounded-b-2xl border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-center">
+              <Button
+                onClick={() => {
+                  setExtendValidityModal({
+                    isOpen: false,
+                    instanceId: "",
+                    instanceName: "",
+                    endDate: "",
+                  })
+                }}
+                variant="outline"
+                className="px-8 py-2"
+              >
+                Close
+              </Button>
             </div>
           </div>
         </DialogContent>
