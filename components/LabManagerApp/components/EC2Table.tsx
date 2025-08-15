@@ -70,6 +70,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
   const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null)
   const [expandedUsageRows, setExpandedUsageRows] = useState<Record<string, boolean>>({})
   const [expandedCredentials, setExpandedCredentials] = useState<Record<string, boolean>>({})
+  const [stableTooltips, setStableTooltips] = useState<Record<string, string>>({})
 
   // State for password modal
   const [passwordModal, setPasswordModal] = useState({
@@ -99,6 +100,10 @@ const EC2Table: React.FC<EC2TableProps> = ({
     email: "",
     editableUsername: false,
     startingInstances: false,
+    checkingLicense: false,
+    licenseError: null as string | null,
+    needsLicenseUpload: false,
+    managementServerNotFound: false,
   })
 
   // Specific cluster instance freeze state (instead of global)
@@ -274,6 +279,71 @@ const EC2Table: React.FC<EC2TableProps> = ({
       endDate: usageDetails?.plan_end_date || "",
     })
   }
+
+  // Helper function to validate Splunk license via proxy
+  const validateSplunkLicense = useCallback(
+    async (username: string) => {
+      try {
+        // Find the Management_server instance
+        const managementServer = instances.find(
+          (inst) => inst.Name.includes(`${username}-Management_server`) && inst.ServiceType === "Splunk",
+        )
+
+        if (!managementServer || !managementServer.PublicIp) {
+          throw new Error("Management server not found or doesn't have a public IP")
+        }
+
+        // Check if Management_server is running
+        if (managementServer.State !== "running") {
+          throw new Error("Management server is not running. Please start it first.")
+        }
+
+        // Use our backend proxy to handle HTTPS certificate issues
+        const response = await fetch("/api/lab-proxy", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-email": email,
+          },
+          body: JSON.stringify({
+            path: "/validate-splunk-license",
+            method: "POST",
+            body: {
+              management_server_ip: managementServer.PublicIp,
+              username: "admin",
+              password: "admin123",
+            },
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to connect to Management server: ${response.status}`)
+        }
+
+        const data = await response.json()
+
+        if (data.message === "Internal Server Error") {
+          throw new Error("Internal Server Error occurred. Please try again.")
+        }
+
+        // Check the status field for different license states
+        if (data.status === "Splunk Enterprise Trial free account") {
+          return { valid: false, needsLicenseUpload: true, needsRestart: false }
+        }
+
+        if (data.status === "Splunk License updated") {
+          return { valid: true, needsLicenseUpload: false, needsRestart: false }
+        }
+
+        // For any other status, assume license needs to be uploaded
+        return { valid: false, needsLicenseUpload: true, needsRestart: false }
+      } catch (error) {
+        console.error("License validation error:", error)
+        throw error
+      }
+    },
+    [instances, email],
+  )
 
   // Effect to manage expanded states
   useEffect(() => {
@@ -623,32 +693,89 @@ const EC2Table: React.FC<EC2TableProps> = ({
     },
   }
 
-  const getButtonTooltip = (action: string, instanceId: string, instanceName: string) => {
-    if (isInstanceFrozen(instanceId)) {
-      const remainingTime = frozenClusterRemainingTimes[instanceId] || 0
-      return `Your Cluster configuration is currently running please wait ${formatRemainingTime(remainingTime)} minutes.`
-    }
+  const getButtonTooltip = useCallback(
+    (action: string, instanceId: string, instanceName: string) => {
+      const key = `${instanceId}_${action}`
 
-    const cooldownKey = `${instanceId}_${action}`
-    if (disabledButtons[cooldownKey]) {
-      return `${action.charAt(0).toUpperCase() + action.slice(1)} action is in cooldown. Please wait.`
-    }
+      if (isInstanceFrozen(instanceId)) {
+        const remainingTime = frozenClusterRemainingTimes[instanceId] || 0
+        const tooltipText = `Cluster configuration is in progress. Please wait ${formatRemainingTime(remainingTime)} minutes.`
 
-    switch (action) {
-      case "start":
-        return `Start ${instanceName} server`
-      case "stop":
-        return `Stop ${instanceName} server`
-      case "reboot":
-        return `Reboot ${instanceName} server`
-      case "get-password":
-        return isPasswordRateLimited
-          ? `Try again in ${formatRemainingTime(remainingTime)}`
-          : `Get Windows password for ${instanceName}`
-      default:
-        return `${action.charAt(0).toUpperCase() + action.slice(1)} ${instanceName}`
-    }
-  }
+        // Update stable tooltip only if it's significantly different (to prevent flickering)
+        const currentStable = stableTooltips[key]
+        if (!currentStable || !currentStable.includes(formatRemainingTime(remainingTime))) {
+          setStableTooltips((prev) => ({ ...prev, [key]: tooltipText }))
+        }
+
+        return stableTooltips[key] || tooltipText
+      }
+
+      const cooldownKey = `${instanceId}_${action}`
+      if (disabledButtons[cooldownKey]) {
+        return `${action.charAt(0).toUpperCase() + action.slice(1)} action is in cooldown. Please wait.`
+      }
+
+      // Clear stable tooltip for non-frozen states
+      if (stableTooltips[key]) {
+        setStableTooltips((prev) => {
+          const newState = { ...prev }
+          delete newState[key]
+          return newState
+        })
+      }
+
+      switch (action) {
+        case "start":
+          return `Start ${instanceName} server`
+        case "stop":
+          return `Stop ${instanceName} server`
+        case "reboot":
+          return `Reboot ${instanceName} server`
+        case "get-password":
+          return isPasswordRateLimited
+            ? `Try again in ${formatRemainingTime(remainingTime)}`
+            : `Get Windows password for ${instanceName}`
+        default:
+          return `${action.charAt(0).toUpperCase() + action.slice(1)} ${instanceName}`
+      }
+    },
+    [
+      frozenClusterRemainingTimes,
+      stableTooltips,
+      disabledButtons,
+      isPasswordRateLimited,
+      remainingTime,
+      isInstanceFrozen,
+      formatRemainingTime,
+    ],
+  )
+
+  const getBulkButtonTooltip = useCallback(
+    (action: string) => {
+      const frozenSelected = Array.from(selectedInstances).filter((id) => isInstanceFrozen(id))
+
+      if (frozenSelected.length > 0) {
+        const firstFrozenId = frozenSelected[0]
+        const remainingTime = frozenClusterRemainingTimes[firstFrozenId] || 0
+        const key = `bulk_${action}`
+        const tooltipText = `Cluster configuration is in progress. Please wait ${formatRemainingTime(remainingTime)} minutes.`
+
+        // Update stable tooltip only if it's significantly different
+        const currentStable = stableTooltips[key]
+        if (!currentStable || !currentStable.includes(formatRemainingTime(remainingTime))) {
+          setStableTooltips((prev) => ({ ...prev, [key]: tooltipText }))
+        }
+
+        return stableTooltips[key] || tooltipText
+      }
+
+      if (selectedInstances.size === 0) {
+        return `Select servers to perform bulk ${action}`
+      }
+      return `${action.charAt(0).toUpperCase() + action.slice(1)} all selected servers`
+    },
+    [selectedInstances, frozenClusterRemainingTimes, stableTooltips, isInstanceFrozen, formatRemainingTime],
+  )
 
   const renderButton = (label: string, action: string, instanceId: string, instanceName = "") => {
     const key = `${instanceId}_${action}`
@@ -703,16 +830,6 @@ const EC2Table: React.FC<EC2TableProps> = ({
     const frozenSelected = Array.from(selectedInstances).filter((id) => isInstanceFrozen(id))
     const disabled = selectedInstances.size === 0 || isLoading || frozenSelected.length > 0
 
-    const getTooltip = () => {
-      if (frozenSelected.length > 0) {
-        return `Some selected servers are frozen due to cluster configuration. Please wait.`
-      }
-      if (selectedInstances.size === 0) {
-        return `Select servers to perform bulk ${action}`
-      }
-      return `${action.charAt(0).toUpperCase() + action.slice(1)} all selected servers`
-    }
-
     return (
       <button
         onClick={(e) => {
@@ -732,7 +849,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
           gap: "6px",
         }}
         disabled={disabled}
-        title={getTooltip()}
+        title={getBulkButtonTooltip(action)}
         onMouseEnter={(e) => {
           if (!disabled) {
             ;(e.target as HTMLButtonElement).style.backgroundColor = actionStyles[action].hover
@@ -763,6 +880,10 @@ const EC2Table: React.FC<EC2TableProps> = ({
         email: email,
         editableUsername: false,
         startingInstances: false,
+        checkingLicense: false,
+        licenseError: null,
+        needsLicenseUpload: false,
+        managementServerNotFound: false,
       })
     },
     [email],
@@ -782,7 +903,12 @@ const EC2Table: React.FC<EC2TableProps> = ({
       await fetchInstances()
 
       // Clear the error after starting instances
-      setClusterConfigModal((prev) => ({ ...prev, error: null, startingInstances: false }))
+      setClusterConfigModal((prev) => ({
+        ...prev,
+        error: null,
+        startingInstances: false,
+        managementServerNotFound: false,
+      }))
     } catch (error) {
       console.error("Error starting cluster instances:", error)
       setClusterConfigModal((prev) => ({ ...prev, startingInstances: false }))
@@ -790,9 +916,37 @@ const EC2Table: React.FC<EC2TableProps> = ({
   }, [clusterConfigModal.username])
 
   const handleClusterConfigSubmit = useCallback(async () => {
-    setClusterConfigModal((prev) => ({ ...prev, loading: true, error: null, success: false }))
+    setClusterConfigModal((prev) => ({
+      ...prev,
+      loading: true,
+      error: null,
+      success: false,
+      checkingLicense: true,
+      licenseError: null,
+      needsLicenseUpload: false,
+      managementServerNotFound: false,
+    }))
 
     try {
+      // First, validate the Splunk license
+      const licenseValidation = await validateSplunkLicense(clusterConfigModal.username)
+
+      setClusterConfigModal((prev) => ({ ...prev, checkingLicense: false }))
+
+      if (!licenseValidation.valid) {
+        if (licenseValidation.needsLicenseUpload) {
+          setClusterConfigModal((prev) => ({
+            ...prev,
+            loading: false,
+            needsLicenseUpload: true,
+            licenseError:
+              "Please upload your enterprise license in your Management_server and restart the server before proceeding with cluster configuration.",
+          }))
+          return
+        }
+      }
+
+      // License is valid, proceed with cluster configuration
       const response = await fetch("/api/lab-proxy", {
         method: "POST",
         headers: {
@@ -868,14 +1022,21 @@ const EC2Table: React.FC<EC2TableProps> = ({
       }
     } catch (error) {
       console.error("Cluster configuration error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to configure cluster. Please try again."
+
+      // Check if it's a management server not found error
+      const isManagementServerError = errorMessage.includes("Management server not found")
+
       setClusterConfigModal((prev) => ({
         ...prev,
         loading: false,
-        error: "Failed to configure cluster. Please try again.",
+        checkingLicense: false,
+        error: errorMessage,
         success: false,
+        managementServerNotFound: isManagementServerError,
       }))
     }
-  }, [clusterConfigModal.username, clusterConfigModal.email, email, frozenClusterInstances])
+  }, [clusterConfigModal.username, clusterConfigModal.email, email, frozenClusterInstances, validateSplunkLicense])
 
   const handleCloseClusterModal = useCallback(() => {
     setClusterConfigModal({
@@ -887,6 +1048,10 @@ const EC2Table: React.FC<EC2TableProps> = ({
       email: "",
       editableUsername: false,
       startingInstances: false,
+      checkingLicense: false,
+      licenseError: null,
+      needsLicenseUpload: false,
+      managementServerNotFound: false,
     })
   }, [])
 
@@ -1129,6 +1294,25 @@ const EC2Table: React.FC<EC2TableProps> = ({
       [instanceId]: !prev[instanceId],
     }))
   }, [])
+
+  useEffect(() => {
+    // Clean up stable tooltips for instances that no longer exist
+    const currentInstanceIds = new Set(instances.map((inst) => inst.InstanceId))
+    setStableTooltips((prev) => {
+      const newState = { ...prev }
+      let hasChanges = false
+
+      Object.keys(newState).forEach((key) => {
+        const instanceId = key.split("_")[0]
+        if (instanceId && !currentInstanceIds.has(instanceId)) {
+          delete newState[key]
+          hasChanges = true
+        }
+      })
+
+      return hasChanges ? newState : prev
+    })
+  }, [instances])
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -1379,7 +1563,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
                                       if (urgency) {
                                         return (
                                           <div
-                                            className={`relative w-3 h-3 rounded-full cursor-pointer animate-pulse ${
+                                            className={`relative w-2 h-2 rounded-full cursor-pointer animate-pulse ${
                                               urgency.level === "high" ? "bg-red-500" : "bg-yellow-500"
                                             }`}
                                             onClick={(e) => {
@@ -1873,17 +2057,58 @@ const EC2Table: React.FC<EC2TableProps> = ({
               </div>
             ) : (
               <>
-                {clusterConfigModal.error && (
-                  <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                    <p className="text-red-600 dark:text-red-400 text-sm font-medium mb-2">Error:</p>
-                    <p className="text-red-600 dark:text-red-400 text-sm whitespace-pre-wrap">
-                      {clusterConfigModal.error}
-                    </p>
-                    {clusterConfigModal.error.includes("is not running") && (
-                      <>
-                        <p className="text-red-600 dark:text-red-400 text-sm mt-2 font-medium">
-                          Please start all the instances before configuring the cluster.
+                {clusterConfigModal.checkingLicense && (
+                  <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                      <div>
+                        <p className="text-blue-600 dark:text-blue-400 text-sm font-medium">Validating License</p>
+                        <p className="text-blue-600 dark:text-blue-400 text-xs">
+                          Checking Management_server license status...
                         </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {clusterConfigModal.needsLicenseUpload && (
+                  <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                      <div>
+                        <p className="text-yellow-800 dark:text-yellow-200 text-sm font-medium mb-2">
+                          License Upload Required
+                        </p>
+                        <p className="text-yellow-700 dark:text-yellow-300 text-sm mb-3">
+                          {clusterConfigModal.licenseError}
+                        </p>
+                        <div className="bg-yellow-100 dark:bg-yellow-800/30 rounded-lg p-3 text-xs text-yellow-800 dark:text-yellow-200">
+                          <p className="font-medium mb-1">To upload your license:</p>
+                          <ol className="list-decimal list-inside space-y-1 ml-2">
+                            <li>Access your Management_server via web browser</li>
+                            <li>Login with admin/admin123</li>
+                            <li>Go to Settings → Licensing</li>
+                            <li>Upload your Enterprise license file</li>
+                            <li>
+                              <strong>Restart the Management_server</strong>
+                            </li>
+                            <li>Return here and try again</li>
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {clusterConfigModal.managementServerNotFound && (
+                  <div className="mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5" />
+                      <div>
+                        <p className="text-orange-800 dark:text-orange-200 text-sm font-medium mb-2">
+                          Management Server Not Available
+                        </p>
+                        <p className="text-orange-700 dark:text-orange-300 text-sm mb-3">{clusterConfigModal.error}</p>
                         <div className="mt-3">
                           <Button
                             onClick={handleStartAllClusterInstances}
@@ -1893,20 +2118,57 @@ const EC2Table: React.FC<EC2TableProps> = ({
                             {clusterConfigModal.startingInstances ? (
                               <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Starting Instances...
+                                Starting All Servers...
                               </>
                             ) : (
                               <>
                                 <Play className="w-4 h-4" />
-                                Start All Instances
+                                Start All Servers
                               </>
                             )}
                           </Button>
                         </div>
-                      </>
-                    )}
+                      </div>
+                    </div>
                   </div>
                 )}
+
+                {clusterConfigModal.error &&
+                  !clusterConfigModal.needsLicenseUpload &&
+                  !clusterConfigModal.managementServerNotFound && (
+                    <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <p className="text-red-600 dark:text-red-400 text-sm font-medium mb-2">Error:</p>
+                      <p className="text-red-600 dark:text-red-400 text-sm whitespace-pre-wrap">
+                        {clusterConfigModal.error}
+                      </p>
+                      {clusterConfigModal.error.includes("is not running") && (
+                        <>
+                          <p className="text-red-600 dark:text-red-400 text-sm mt-2 font-medium">
+                            Please start all the instances before configuring the cluster.
+                          </p>
+                          <div className="mt-3">
+                            <Button
+                              onClick={handleStartAllClusterInstances}
+                              disabled={clusterConfigModal.startingInstances}
+                              className="w-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2"
+                            >
+                              {clusterConfigModal.startingInstances ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Starting Instances...
+                                </>
+                              ) : (
+                                <>
+                                  <Play className="w-4 h-4" />
+                                  Start All Instances
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                 <div className="space-y-4">
                   <div>
@@ -1964,14 +2226,21 @@ const EC2Table: React.FC<EC2TableProps> = ({
                   </Button>
                   <Button
                     onClick={handleClusterConfigSubmit}
-                    disabled={clusterConfigModal.loading || !clusterConfigModal.username || !clusterConfigModal.email}
+                    disabled={
+                      clusterConfigModal.loading ||
+                      clusterConfigModal.checkingLicense ||
+                      !clusterConfigModal.username ||
+                      !clusterConfigModal.email
+                    }
                     className="px-6 py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
                   >
                     {clusterConfigModal.loading ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Configuring...
+                        {clusterConfigModal.checkingLicense ? "Checking License..." : "Configuring..."}
                       </>
+                    ) : clusterConfigModal.needsLicenseUpload ? (
+                      "Retry After License Upload"
                     ) : (
                       "Proceed"
                     )}
@@ -2022,18 +2291,6 @@ const EC2Table: React.FC<EC2TableProps> = ({
             }}
           >
             <div className="space-y-4">
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">Server Details</h3>
-                <div className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
-                  <p>
-                    <strong>Server:</strong> {extendValidityModal.instanceName}
-                  </p>
-                  <p>
-                    <strong>Current End Date:</strong> {extendValidityModal.endDate}
-                  </p>
-                </div>
-              </div>
-
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                 <h3 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-2">Quota Increase Options</h3>
                 <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">

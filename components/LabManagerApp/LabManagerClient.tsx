@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from "@react-oauth/google"
 import { jwtDecode } from "jwt-decode"
 import EC2Table from "./components/EC2Table"
-import { SoftmaniaLogo } from "@/components/softmania-logo"
 import Link from "next/link"
 import * as CryptoJS from "crypto-js"
 import { DownloadIcon, RefreshCcw } from 'lucide-react'
