@@ -3,10 +3,10 @@
 import React from "react"
 import { useEffect, useState, useCallback } from "react"
 import axios from "axios"
-import { Copy, Loader2, RefreshCcw, ChevronDown, ChevronUp, Key, X, Eye, EyeOff } from 'lucide-react' // Import Eye icons
+import { Copy, Loader2, RefreshCcw, ChevronDown, ChevronUp, Key, Eye, EyeOff, Database, Play } from "lucide-react"
 import { logToSplunk } from "@/lib/splunklogger"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog" // Import Dialog components
-import { Button } from "@/components/ui/button" // Import Button for the modal
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 
 interface EC2Instance {
   Name: string
@@ -24,31 +24,41 @@ interface EC2TableProps {
   instances: EC2Instance[]
   setInstances: React.Dispatch<React.SetStateAction<EC2Instance[]>>
   loading: boolean
-  rawUsageSummary: any[] // Add this prop
-  fetchUsageSummary: () => Promise<void> // New prop for refreshing usage
-  isRefreshingUsage: boolean // New prop for usage refresh loading state
+  rawUsageSummary: any[]
+  fetchUsageSummary: () => Promise<void>
+  isRefreshingUsage: boolean
   hasLab: boolean
-  onPasswordModalOpenChange?: (isOpen: boolean) => void // New prop
+  onPasswordModalOpenChange?: (isOpen: boolean) => void
 }
 
-const MAX_PASSWORD_CLICKS = 5 // Maximum clicks allowed
-const PASSWORD_RESET_INTERVAL_MS = 20 * 60 * 1000 // 20 minutes in milliseconds
+const MAX_PASSWORD_CLICKS = 5
+const PASSWORD_RESET_INTERVAL_MS = 20 * 60 * 1000
 
-const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loading, rawUsageSummary, fetchUsageSummary, isRefreshingUsage, hasLab, onPasswordModalOpenChange }) => {
+const EC2Table: React.FC<EC2TableProps> = ({
+  email,
+  instances,
+  setInstances,
+  loading,
+  rawUsageSummary,
+  fetchUsageSummary,
+  isRefreshingUsage,
+  hasLab,
+  onPasswordModalOpenChange,
+}) => {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL as string
 
   const [disabledButtons, setDisabledButtons] = useState<Record<string, boolean>>({})
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
-  const [refreshing, setRefreshing] = useState<boolean>(false) // This is for instance list refresh
-  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({}) // State to manage expanded rows
-  const [showExpiryColumn, setShowExpiryColumn] = useState<Record<string, boolean>>({}) // State for expiry column visibility
-  const [selectedInstances, setSelectedInstances] = useState<Set<string>>(new Set()) // State for bulk selection - FIX APPLIED HERE
-  const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null) // State for bulk action loading
+  const [refreshing, setRefreshing] = useState<boolean>(false)
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
+  const [showExpiryColumn, setShowExpiryColumn] = useState<Record<string, boolean>>({})
+  const [selectedInstances, setSelectedInstances] = useState<Set<string>>(new Set())
+  const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null)
   const [expandedUsageRows, setExpandedUsageRows] = useState<Record<string, boolean>>({})
   const [expandedCredentials, setExpandedCredentials] = useState<Record<string, boolean>>({})
 
-  // State for password modal - consolidated and stabilized
+  // State for password modal
   const [passwordModal, setPasswordModal] = useState({
     isOpen: false,
     loading: false,
@@ -57,14 +67,30 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
       username: string
       password: string
       publicIp?: string
-    } | null
+    } | null,
   })
 
-  // New state for password rate limiting
+  // Password rate limiting state
   const [passwordClickCount, setPasswordClickCount] = useState(0)
   const [passwordLastResetTime, setPasswordLastResetTime] = useState<number>(Date.now())
   const [isPasswordRateLimited, setIsPasswordRateLimited] = useState(false)
-  const [remainingTime, setRemainingTime] = useState(0) // New state for remaining time
+  const [remainingTime, setRemainingTime] = useState(0)
+
+  // Cluster configuration modal state
+  const [clusterConfigModal, setClusterConfigModal] = useState({
+    isOpen: false,
+    loading: false,
+    error: null as string | null,
+    success: false,
+    username: "",
+    email: "",
+    editableUsername: false,
+    startingInstances: false,
+  })
+
+  // Specific cluster instance freeze state (instead of global)
+  const [frozenClusterInstances, setFrozenClusterInstances] = useState<Record<string, number>>({}) // instanceId -> endTime
+  const [frozenClusterRemainingTimes, setFrozenClusterRemainingTimes] = useState<Record<string, number>>({})
 
   // Helper function to format milliseconds into MM:SS
   const formatRemainingTime = (ms: number): string => {
@@ -111,76 +137,130 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     }))
   }, [])
 
-  // Effect to manage expanded states (credentials, usage, and general row expansion)
-  useEffect(() => {
-    setExpandedRows(prevExpandedRows => {
-      const newExpandedRows = { ...prevExpandedRows };
-      const currentInstanceIds = new Set(instances.map(inst => inst.InstanceId));
+  // Helper function to check if instances match cluster pattern
+  const isClusterInstance = (instanceName: string) => {
+    const clusterPatterns = ["ClusterMaster", "idx1", "idx2", "idx3", "Management_server", "IF", "SH1", "SH2", "SH3"]
+    return clusterPatterns.some((pattern) => instanceName.includes(pattern))
+  }
 
-      // Remove instances that no longer exist
+  // Helper function to extract username from instance name
+  const extractUsernameFromInstance = (instanceName: string) => {
+    const patterns = ["ClusterMaster", "idx1", "idx2", "idx3", "Management_server", "IF", "SH1", "SH2", "SH3"]
+
+    for (const pattern of patterns) {
+      if (instanceName.includes(`-${pattern}`)) {
+        return instanceName.split(`-${pattern}`)[0]
+      }
+    }
+    return instanceName.split("-")[0]
+  }
+
+  // Helper function to check if service type has complete cluster set
+  const hasCompleteClusterSet = (serviceInstances: EC2Instance[]) => {
+    const requiredPatterns = ["ClusterMaster", "idx1", "idx2", "idx3", "Management_server", "IF", "SH1", "SH2", "SH3"]
+
+    // Get all usernames from cluster instances
+    const usernames = new Set<string>()
+    serviceInstances.forEach((inst) => {
+      if (isClusterInstance(inst.Name)) {
+        usernames.add(extractUsernameFromInstance(inst.Name))
+      }
+    })
+
+    // Check if any username has all required patterns
+    for (const username of usernames) {
+      const userInstances = serviceInstances.filter((inst) => inst.Name.startsWith(username))
+      const foundPatterns = userInstances
+        .map((inst) => {
+          for (const pattern of requiredPatterns) {
+            if (inst.Name.includes(`-${pattern}`)) {
+              return pattern
+            }
+          }
+          return null
+        })
+        .filter(Boolean)
+
+      if (requiredPatterns.every((pattern) => foundPatterns.includes(pattern))) {
+        return { hasComplete: true, username }
+      }
+    }
+
+    return { hasComplete: false, username: null }
+  }
+
+  // Helper function to get cluster instances for a specific username
+  const getClusterInstancesForUsername = (username: string) => {
+    return instances.filter((inst) => inst.Name.startsWith(username) && isClusterInstance(inst.Name))
+  }
+
+  // Helper function to check if instance is frozen
+  const isInstanceFrozen = (instanceId: string) => {
+    const endTime = frozenClusterInstances[instanceId]
+    if (!endTime) return false
+    return Date.now() < endTime
+  }
+
+  // Effect to manage expanded states
+  useEffect(() => {
+    setExpandedRows((prevExpandedRows) => {
+      const newExpandedRows = { ...prevExpandedRows }
+      const currentInstanceIds = new Set(instances.map((inst) => inst.InstanceId))
+
       for (const instanceId in newExpandedRows) {
         if (!currentInstanceIds.has(instanceId)) {
-          delete newExpandedRows[instanceId];
+          delete newExpandedRows[instanceId]
         }
       }
 
-      // Add/update default expanded state for current instances
       instances.forEach((instance) => {
-        const shouldBeExpandedByDefault = 
-          (instance.ServiceType === "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(instance.Name)) ||
-          (instance.ServiceType !== "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC"].includes(instance.Name));
-        
-        // If it should be expanded by default AND it's not already explicitly collapsed by the user
+        const shouldBeExpandedByDefault =
+          (instance.ServiceType === "DataSources" &&
+            ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(instance.Name)) ||
+          (instance.ServiceType !== "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC"].includes(instance.Name))
+
         if (shouldBeExpandedByDefault && newExpandedRows[instance.InstanceId] !== false) {
-          newExpandedRows[instance.InstanceId] = true;
+          newExpandedRows[instance.InstanceId] = true
         }
-      });
-      return newExpandedRows;
-    });
+      })
+      return newExpandedRows
+    })
 
-    setExpandedCredentials(prevExpandedCredentials => {
-      const newExpandedCredentials = { ...prevExpandedCredentials };
-      const currentInstanceIds = new Set(instances.map(inst => inst.InstanceId));
+    setExpandedCredentials((prevExpandedCredentials) => {
+      const newExpandedCredentials = { ...prevExpandedCredentials }
+      const currentInstanceIds = new Set(instances.map((inst) => inst.InstanceId))
 
-      // Remove instances that no longer exist
       for (const instanceId in newExpandedCredentials) {
         if (!currentInstanceIds.has(instanceId)) {
-          delete newExpandedCredentials[instanceId];
+          delete newExpandedCredentials[instanceId]
         }
       }
 
-      // Add/update default expanded state for current instances
       instances.forEach((instance) => {
-        const shouldBeExpandedByDefault = 
-          (instance.ServiceType === "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(instance.Name)) ||
-          (instance.ServiceType !== "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC"].includes(instance.Name));
-        
-        // If it should be expanded by default AND it's not already explicitly collapsed by the user
+        const shouldBeExpandedByDefault =
+          (instance.ServiceType === "DataSources" &&
+            ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(instance.Name)) ||
+          (instance.ServiceType !== "DataSources" && ["MYSQL", "Jenkins", "MSSQL", "OSSEC"].includes(instance.Name))
+
         if (shouldBeExpandedByDefault && newExpandedCredentials[instance.InstanceId] !== false) {
-          newExpandedCredentials[instance.InstanceId] = true;
+          newExpandedCredentials[instance.InstanceId] = true
         }
-      });
-      return newExpandedCredentials;
-    });
+      })
+      return newExpandedCredentials
+    })
 
-    setExpandedUsageRows(prevExpandedUsageRows => {
-      const newExpandedUsageRows = { ...prevExpandedUsageRows };
-      const currentInstanceIds = new Set(instances.map(inst => inst.InstanceId));
+    setExpandedUsageRows((prevExpandedUsageRows) => {
+      const newExpandedUsageRows = { ...prevExpandedUsageRows }
+      const currentInstanceIds = new Set(instances.map((inst) => inst.InstanceId))
 
-      // Remove instances that no longer exist
       for (const instanceId in newExpandedUsageRows) {
         if (!currentInstanceIds.has(instanceId)) {
-          delete newExpandedUsageRows[instanceId];
+          delete newExpandedUsageRows[instanceId]
         }
       }
-      // For usage, there's no "default expanded" based on instance type,
-      // so we just ensure existing states are preserved and old ones removed.
-      // If a new instance appears, its usage details will be collapsed by default (undefined/false).
-      return newExpandedUsageRows;
-    });
-
-  }, [instances]); // Keep instances as a dependency, but handle state updates functionally.
-
+      return newExpandedUsageRows
+    })
+  }, [instances])
 
   // Load password click state from localStorage on mount
   useEffect(() => {
@@ -194,30 +274,27 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
       const time = Number.parseInt(storedTime, 10)
 
       if (now - time < PASSWORD_RESET_INTERVAL_MS) {
-        // If within the 20-minute window, restore state
         setPasswordClickCount(count)
         setPasswordLastResetTime(time)
         if (count >= MAX_PASSWORD_CLICKS) {
           setIsPasswordRateLimited(true)
         }
-        setRemainingTime(time + PASSWORD_RESET_INTERVAL_MS - now) // Calculate initial remaining time
+        setRemainingTime(time + PASSWORD_RESET_INTERVAL_MS - now)
       } else {
-        // If 20 minutes have passed, reset
         localStorage.removeItem(`${email}-passwordClickCount`)
         localStorage.removeItem(`${email}-passwordLastResetTime`)
         setPasswordClickCount(0)
         setPasswordLastResetTime(now)
         setIsPasswordRateLimited(false)
-        setRemainingTime(0) // Reset remaining time
+        setRemainingTime(0)
       }
     } else {
-      // Initialize if no stored data
       setPasswordClickCount(0)
       setPasswordLastResetTime(now)
       setIsPasswordRateLimited(false)
       setRemainingTime(0)
     }
-  }, [email]) // Re-run if email changes (different user)
+  }, [email])
 
   // Set up interval for automatic password click reset and remaining time update
   useEffect(() => {
@@ -227,11 +304,10 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
       const timeUntilReset = resetTargetTime - now
 
       if (timeUntilReset <= 0) {
-        // Time to reset
         setPasswordClickCount(0)
         setPasswordLastResetTime(now)
         setIsPasswordRateLimited(false)
-        setRemainingTime(0) // Reset remaining time
+        setRemainingTime(0)
         localStorage.removeItem(`${email}-passwordClickCount`)
         localStorage.removeItem(`${email}-passwordLastResetTime`)
       } else {
@@ -242,17 +318,69 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
       }
     }
 
-    // Call immediately on mount to set initial remaining time
     updateTimer()
-
-    const interval = setInterval(updateTimer, 1000) // Check and update every second
-
+    const interval = setInterval(updateTimer, 1000)
     return () => clearInterval(interval)
   }, [passwordClickCount, passwordLastResetTime, isPasswordRateLimited, email])
 
-  const isCooldown = (instanceId: string, action: string) => disabledButtons[`${instanceId}_${action}`]
+  // Load frozen cluster instances from localStorage
+  useEffect(() => {
+    const savedFrozenInstances = localStorage.getItem(`cluster-freeze-instances-${email}`)
+    if (savedFrozenInstances) {
+      try {
+        const parsed = JSON.parse(savedFrozenInstances)
+        const now = Date.now()
+        const validFrozen: Record<string, number> = {}
+
+        // Filter out expired frozen instances
+        Object.entries(parsed).forEach(([instanceId, endTime]) => {
+          if (now < (endTime as number)) {
+            validFrozen[instanceId] = endTime as number
+          }
+        })
+
+        setFrozenClusterInstances(validFrozen)
+      } catch (error) {
+        console.error("Error loading frozen cluster instances:", error)
+      }
+    }
+  }, [email])
+
+  // Timer for frozen cluster instances
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now()
+      const updatedFrozen: Record<string, number> = {}
+      const updatedRemainingTimes: Record<string, number> = {}
+      let hasChanges = false
+
+      Object.entries(frozenClusterInstances).forEach(([instanceId, endTime]) => {
+        const remaining = endTime - now
+        if (remaining > 0) {
+          updatedFrozen[instanceId] = endTime
+          updatedRemainingTimes[instanceId] = remaining
+        } else {
+          hasChanges = true
+        }
+      })
+
+      if (hasChanges) {
+        setFrozenClusterInstances(updatedFrozen)
+        localStorage.setItem(`cluster-freeze-instances-${email}`, JSON.stringify(updatedFrozen))
+      }
+
+      setFrozenClusterRemainingTimes(updatedRemainingTimes)
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [frozenClusterInstances, email])
+
+  const isCooldown = (instanceId: string, action: string) =>
+    disabledButtons[`${instanceId}_${action}`] || isInstanceFrozen(instanceId)
 
   const handleButtonClick = async (action: string, instanceId: string) => {
+    if (isInstanceFrozen(instanceId)) return
+
     const key = `${instanceId}_${action}`
     setDisabledButtons((prev) => ({ ...prev, [key]: true }))
     setLoadingAction(key)
@@ -269,22 +397,24 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     }, 5000)
   }
 
-  // Bulk action handler
   const handleBulkAction = async (action: string) => {
     if (selectedInstances.size === 0) return
 
+    // Check if any selected instances are frozen
+    const frozenSelected = Array.from(selectedInstances).filter((id) => isInstanceFrozen(id))
+    if (frozenSelected.length > 0) return
+
     setBulkActionLoading(action)
-    const promises = Array.from(selectedInstances).map(instanceId => callAction(action, instanceId))
-    
+    const promises = Array.from(selectedInstances).map((instanceId) => callAction(action, instanceId))
+
     try {
       await Promise.all(promises)
-      // After all actions are done, refresh the instances list
       await fetchInstances()
     } catch (error) {
       console.error(`Bulk ${action} failed:`, error)
     } finally {
       setBulkActionLoading(null)
-      setSelectedInstances(new Set()) // Clear selection after bulk action
+      setSelectedInstances(new Set())
     }
   }
 
@@ -308,7 +438,6 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
         },
       )
 
-      // ✅ Log to Splunk
       await logToSplunk({
         session: email,
         action: `lab_instance_${action}`,
@@ -318,8 +447,6 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
           public_ip: instance.PublicIp || "N/A",
         },
       })
-
-      // No need to fetch instances here, it's done after all bulk actions or after single action
     } catch (error) {
       console.error(`Action ${action} failed:`, error)
     }
@@ -333,7 +460,6 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
       })
       setInstances(res.data)
 
-      // ✅ Log refresh event
       await logToSplunk({
         session: email,
         action: "lab_instance_refresh",
@@ -349,20 +475,18 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
   useEffect(() => {
     let interval: NodeJS.Timeout
 
-    // Only start auto-refresh if user has email, lab access, AND there are instances
     if (email && hasLab && instances.length > 0) {
       interval = setInterval(() => {
         fetchInstances()
       }, 3000)
     }
 
-    // Cleanup interval when dependencies change or component unmounts
     return () => {
       if (interval) {
         clearInterval(interval)
       }
     }
-  }, [email, hasLab, instances.length]) // Added instances.length as dependency
+  }, [email, hasLab, instances.length])
 
   const handleCopy = useCallback((text: string, fieldId: string) => {
     navigator.clipboard.writeText(text)
@@ -371,7 +495,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
   }, [])
 
   const renderCopyField = (text: string, fieldId: string, truncate?: boolean) => {
-    const displayText = truncate && text.length > 25 ? text.substring(0, 25) + "..." : text; // Changed to 25
+    const displayText = truncate && text.length > 25 ? text.substring(0, 25) + "..." : text
     return (
       <div className="relative inline-flex items-center">
         <span className="mr-1.5">{displayText}</span>
@@ -380,7 +504,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
             e.preventDefault()
             e.stopPropagation()
             handleCopy(text, fieldId)
-          }} // Always copy the full text
+          }}
           className="cursor-pointer p-0.5 rounded-md flex items-center justify-center bg-gray-100 border border-gray-200 hover:bg-gray-200 hover:text-gray-700 transition-colors duration-200"
         >
           <Copy size={14} className="text-gray-500" />
@@ -420,22 +544,52 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
       hover: "#d97706",
     },
     "get-password": {
-      backgroundColor: "#3b82f6", // Blue color for get password
+      backgroundColor: "#3b82f6",
       hover: "#2563eb",
     },
   }
 
-  const renderButton = (label: string, action: string, instanceId: string) => {
+  const getButtonTooltip = (action: string, instanceId: string, instanceName: string) => {
+    if (isInstanceFrozen(instanceId)) {
+      const remainingTime = frozenClusterRemainingTimes[instanceId] || 0
+      return `Your Cluster configuration is currently running please wait ${formatRemainingTime(remainingTime)} minutes.`
+    }
+
+    const cooldownKey = `${instanceId}_${action}`
+    if (disabledButtons[cooldownKey]) {
+      return `${action.charAt(0).toUpperCase() + action.slice(1)} action is in cooldown. Please wait.`
+    }
+
+    switch (action) {
+      case "start":
+        return `Start ${instanceName} server`
+      case "stop":
+        return `Stop ${instanceName} server`
+      case "reboot":
+        return `Reboot ${instanceName} server`
+      case "get-password":
+        return isPasswordRateLimited
+          ? `Try again in ${formatRemainingTime(remainingTime)}`
+          : `Get Windows password for ${instanceName}`
+      default:
+        return `${action.charAt(0).toUpperCase() + action.slice(1)} ${instanceName}`
+    }
+  }
+
+  const renderButton = (label: string, action: string, instanceId: string, instanceName = "") => {
     const key = `${instanceId}_${action}`
     const disabled = isCooldown(instanceId, action)
     const isLoading = loadingAction === key
+    const isFrozen = isInstanceFrozen(instanceId)
 
     return (
       <button
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
-          handleButtonClick(action, instanceId)
+          if (!isFrozen) {
+            handleButtonClick(action, instanceId)
+          }
         }}
         style={{
           ...baseStyle,
@@ -447,6 +601,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
           gap: "6px",
         }}
         disabled={disabled}
+        title={getButtonTooltip(action, instanceId, instanceName)}
         onMouseEnter={(e) => {
           if (!disabled) {
             ;(e.target as HTMLButtonElement).style.backgroundColor = actionStyles[action].hover
@@ -458,22 +613,40 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
           }
         }}
       >
-        {isLoading ? <Loader2 size={14} className="animate-spin" /> : label}
+        {isLoading ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : isFrozen ? (
+          formatRemainingTime(frozenClusterRemainingTimes[instanceId] || 0)
+        ) : (
+          label
+        )}
       </button>
     )
   }
 
-  // Bulk action button renderer
   const renderBulkButton = (label: string, action: string) => {
     const isLoading = bulkActionLoading === action
-    const disabled = selectedInstances.size === 0 || isLoading
+    const frozenSelected = Array.from(selectedInstances).filter((id) => isInstanceFrozen(id))
+    const disabled = selectedInstances.size === 0 || isLoading || frozenSelected.length > 0
+
+    const getTooltip = () => {
+      if (frozenSelected.length > 0) {
+        return `Some selected servers are frozen due to cluster configuration. Please wait.`
+      }
+      if (selectedInstances.size === 0) {
+        return `Select servers to perform bulk ${action}`
+      }
+      return `${action.charAt(0).toUpperCase() + action.slice(1)} all selected servers`
+    }
 
     return (
       <button
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
-          handleBulkAction(action)
+          if (frozenSelected.length === 0) {
+            handleBulkAction(action)
+          }
         }}
         style={{
           ...baseStyle,
@@ -485,6 +658,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
           gap: "6px",
         }}
         disabled={disabled}
+        title={getTooltip()}
         onMouseEnter={(e) => {
           if (!disabled) {
             ;(e.target as HTMLButtonElement).style.backgroundColor = actionStyles[action].hover
@@ -501,87 +675,245 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     )
   }
 
-  // Stabilized function to handle Get Password button click
-  const handleGetPassword = useCallback(async (instanceId: string) => {
-    if (isPasswordRateLimited) {
-      console.warn("Password retrieval limit reached. Please wait for the next 20-minute window.")
-      return
-    }
+  const handleClusterConfiguration = useCallback(
+    async (serviceInstances: EC2Instance[]) => {
+      const clusterInfo = hasCompleteClusterSet(serviceInstances)
+      if (!clusterInfo.hasComplete || !clusterInfo.username) return
 
-    // Prevent multiple simultaneous requests
-    if (passwordModal.loading) {
-      return
-    }
-
-    // Increment count and update state/localStorage BEFORE the async operation
-    const newCount = passwordClickCount + 1
-    setPasswordClickCount(newCount)
-    localStorage.setItem(`${email}-passwordClickCount`, newCount.toString())
-    localStorage.setItem(`${email}-passwordLastResetTime`, passwordLastResetTime.toString())
-
-    if (newCount >= MAX_PASSWORD_CLICKS) {
-      setIsPasswordRateLimited(true)
-    }
-
-    // Set modal state in one update to prevent flickering
-    setPasswordModal(prev => ({
-      ...prev,
-      isOpen: true,
-      loading: true,
-      error: null,
-      details: null
-    }))
-    onPasswordModalOpenChange?.(true) // Notify parent that modal is open
-
-    const instance = instances.find((inst) => inst.InstanceId === instanceId)
-    if (!instance) {
-      setPasswordModal(prev => ({
-        ...prev,
+      setClusterConfigModal({
+        isOpen: true,
         loading: false,
-        error: "Instance not found"
-      }))
-      return
-    }
+        error: null,
+        success: false,
+        username: clusterInfo.username,
+        email: email,
+        editableUsername: false,
+        startingInstances: false,
+      })
+    },
+    [email],
+  )
+
+  const handleStartAllClusterInstances = useCallback(async () => {
+    setClusterConfigModal((prev) => ({ ...prev, startingInstances: true }))
 
     try {
-      const response = await axios.post(
-        "/api/win-pass",
-        {
-          instance_id: instanceId,
-          email: email,
-        },
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      )
+      const clusterInstances = getClusterInstancesForUsername(clusterConfigModal.username)
+      const stoppedInstances = clusterInstances.filter((inst) => inst.State === "stopped")
 
-      if (response.data.status === "success" && response.data.decrypted_password) {
-        setPasswordModal(prev => ({
+      const promises = stoppedInstances.map((inst) => callAction("start", inst.InstanceId))
+      await Promise.all(promises)
+
+      // Refresh instances to get updated states
+      await fetchInstances()
+
+      // Clear the error after starting instances
+      setClusterConfigModal((prev) => ({ ...prev, error: null, startingInstances: false }))
+    } catch (error) {
+      console.error("Error starting cluster instances:", error)
+      setClusterConfigModal((prev) => ({ ...prev, startingInstances: false }))
+    }
+  }, [clusterConfigModal.username])
+
+  const handleClusterConfigSubmit = useCallback(async () => {
+    setClusterConfigModal((prev) => ({ ...prev, loading: true, error: null, success: false }))
+
+    try {
+      const response = await fetch("/api/lab-proxy", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": email,
+        },
+        body: JSON.stringify({
+          path: "/cluster-config",
+          method: "POST",
+          body: {
+            username: clusterConfigModal.username,
+            email: clusterConfigModal.email,
+          },
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.status === "success") {
+        // Success - freeze only cluster instances for 20 minutes
+        const now = Date.now()
+        const twentyMinutes = 20 * 60 * 1000
+        const endTime = now + twentyMinutes
+
+        const clusterInstances = getClusterInstancesForUsername(clusterConfigModal.username)
+        const newFrozenInstances: Record<string, number> = {}
+
+        clusterInstances.forEach((inst) => {
+          newFrozenInstances[inst.InstanceId] = endTime
+        })
+
+        setFrozenClusterInstances((prev) => ({ ...prev, ...newFrozenInstances }))
+
+        // Save to localStorage for persistence
+        localStorage.setItem(
+          `cluster-freeze-instances-${email}`,
+          JSON.stringify({ ...frozenClusterInstances, ...newFrozenInstances }),
+        )
+
+        // Log success
+        await logToSplunk({
+          session: email,
+          action: "cluster_configuration_success",
+          details: {
+            username: clusterConfigModal.username,
+            build_id: data.build_id,
+          },
+        })
+
+        setClusterConfigModal((prev) => ({
           ...prev,
           loading: false,
           error: null,
-          details: {
-            username: "Administrator",
-            password: response.data.decrypted_password,
-            publicIp: instance.PublicIp,
-          }
+          success: true,
         }))
+      } else if (data.error) {
+        if (data.error.includes("No instances found with matching Owner tag")) {
+          setClusterConfigModal((prev) => ({
+            ...prev,
+            loading: false,
+            error: data.error,
+            success: false,
+            editableUsername: true,
+          }))
+        } else {
+          setClusterConfigModal((prev) => ({
+            ...prev,
+            loading: false,
+            error: data.error,
+            success: false,
+          }))
+        }
+      }
+    } catch (error) {
+      console.error("Cluster configuration error:", error)
+      setClusterConfigModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: "Failed to configure cluster. Please try again.",
+        success: false,
+      }))
+    }
+  }, [clusterConfigModal.username, clusterConfigModal.email, email, frozenClusterInstances])
 
-        await logToSplunk({
-          session: email,
-          action: "get_windows_password",
-          details: {
-            instance_id: instanceId,
-            instance_name: "Windows(AD&DNS)",
-            status: "success",
-          },
-        })
-      } else {
-        setPasswordModal(prev => ({
+  const handleCloseClusterModal = useCallback(() => {
+    setClusterConfigModal({
+      isOpen: false,
+      loading: false,
+      error: null,
+      success: false,
+      username: "",
+      email: "",
+      editableUsername: false,
+      startingInstances: false,
+    })
+  }, [])
+
+  const handleGetPassword = useCallback(
+    async (instanceId: string) => {
+      if (isPasswordRateLimited) {
+        console.warn("Password retrieval limit reached. Please wait for the next 20-minute window.")
+        return
+      }
+
+      if (passwordModal.loading) {
+        return
+      }
+
+      const newCount = passwordClickCount + 1
+      setPasswordClickCount(newCount)
+      localStorage.setItem(`${email}-passwordClickCount`, newCount.toString())
+      localStorage.setItem(`${email}-passwordLastResetTime`, passwordLastResetTime.toString())
+
+      if (newCount >= MAX_PASSWORD_CLICKS) {
+        setIsPasswordRateLimited(true)
+      }
+
+      setPasswordModal((prev) => ({
+        ...prev,
+        isOpen: true,
+        loading: true,
+        error: null,
+        details: null,
+      }))
+      onPasswordModalOpenChange?.(true)
+
+      const instance = instances.find((inst) => inst.InstanceId === instanceId)
+      if (!instance) {
+        setPasswordModal((prev) => ({
           ...prev,
           loading: false,
-          error: response.data.message || "Failed to retrieve password.",
-          details: null
+          error: "Instance not found",
+        }))
+        return
+      }
+
+      try {
+        const response = await axios.post(
+          "/api/win-pass",
+          {
+            instance_id: instanceId,
+            email: email,
+          },
+          {
+            headers: { "Content-Type": "application/json" },
+          },
+        )
+
+        if (response.data.status === "success" && response.data.decrypted_password) {
+          setPasswordModal((prev) => ({
+            ...prev,
+            loading: false,
+            error: null,
+            details: {
+              username: "Administrator",
+              password: response.data.decrypted_password,
+              publicIp: instance.PublicIp,
+            },
+          }))
+
+          await logToSplunk({
+            session: email,
+            action: "get_windows_password",
+            details: {
+              instance_id: instanceId,
+              instance_name: "Windows(AD&DNS)",
+              status: "success",
+            },
+          })
+        } else {
+          setPasswordModal((prev) => ({
+            ...prev,
+            loading: false,
+            error: response.data.message || "Failed to retrieve password.",
+            details: null,
+          }))
+
+          await logToSplunk({
+            session: email,
+            action: "get_windows_password",
+            details: {
+              instance_id: instanceId,
+              instance_name: "Windows(AD&DNS)",
+              status: "failed",
+              error: response.data.message || "Unknown error",
+            },
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching Windows password:", error)
+        setPasswordModal((prev) => ({
+          ...prev,
+          loading: false,
+          error: "An error occurred while fetching the password. Please try again.",
+          details: null,
         }))
 
         await logToSplunk({
@@ -591,42 +923,31 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
             instance_id: instanceId,
             instance_name: "Windows(AD&DNS)",
             status: "failed",
-            error: response.data.message || "Unknown error",
+            error: (error as Error).message || "Network error",
           },
         })
       }
-    } catch (error) {
-      console.error("Error fetching Windows password:", error)
-      setPasswordModal(prev => ({
-        ...prev,
-        loading: false,
-        error: "An error occurred while fetching the password. Please try again.",
-        details: null
-      }))
+    },
+    [
+      isPasswordRateLimited,
+      passwordModal.loading,
+      passwordClickCount,
+      passwordLastResetTime,
+      email,
+      instances,
+      onPasswordModalOpenChange,
+    ],
+  )
 
-      await logToSplunk({
-        session: email,
-        action: "get_windows_password",
-        details: {
-          instance_id: instanceId,
-          instance_name: "Windows(AD&DNS)",
-          status: "failed",
-          error: (error as Error).message || "Network error",
-        },
-      })
-    }
-  }, [isPasswordRateLimited, passwordModal.loading, passwordClickCount, passwordLastResetTime, email, instances, onPasswordModalOpenChange])
-
-  // Stabilized modal close handler
   const handleClosePasswordModal = useCallback(() => {
-    setPasswordModal(prev => ({
+    setPasswordModal((prev) => ({
       ...prev,
       isOpen: false,
       loading: false,
       error: null,
-      details: null
+      details: null,
     }))
-    onPasswordModalOpenChange?.(false) // Notify parent that modal is closed
+    onPasswordModalOpenChange?.(false)
   }, [onPasswordModalOpenChange])
 
   const toggleRowExpansion = useCallback((instanceId: string) => {
@@ -643,9 +964,8 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     }))
   }, [])
 
-  // Handle individual instance selection
   const handleInstanceSelection = useCallback((instanceId: string, checked: boolean) => {
-    setSelectedInstances(prev => {
+    setSelectedInstances((prev) => {
       const newSet = new Set(prev)
       if (checked) {
         newSet.add(instanceId)
@@ -656,47 +976,49 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     })
   }, [])
 
-  // Handle select all for a service type
-  const handleSelectAllForServiceType = useCallback((serviceType: string, checked: boolean) => {
-    const serviceInstances = groupedInstances[serviceType]
-    setSelectedInstances(prev => {
-      const newSet = new Set(prev)
-      serviceInstances.forEach(instance => {
-        if (checked) {
-          newSet.add(instance.InstanceId)
-        } else {
-          newSet.delete(instance.InstanceId)
+  const handleSelectAllForServiceType = useCallback(
+    (serviceType: string, checked: boolean) => {
+      const serviceInstances = groupedInstances[serviceType]
+      setSelectedInstances((prev) => {
+        const newSet = new Set(prev)
+        serviceInstances.forEach((instance) => {
+          if (checked) {
+            newSet.add(instance.InstanceId)
+          } else {
+            newSet.delete(instance.InstanceId)
+          }
+        })
+        return newSet
+      })
+    },
+    [instances],
+  )
+
+  const handleKeepOnlyRunning = useCallback(() => {
+    setSelectedInstances((prev) => {
+      const newSet = new Set<string>()
+      Array.from(prev).forEach((instanceId) => {
+        const instance = instances.find((inst) => inst.InstanceId === instanceId)
+        if (instance && instance.State === "running") {
+          newSet.add(instanceId)
         }
       })
       return newSet
     })
-  }, [instances]) // Only depend on instances, not groupedInstances to avoid recreating
-
-  const handleKeepOnlyRunning = useCallback(() => {
-    setSelectedInstances(prev => {
-      const newSet = new Set<string>();
-      Array.from(prev).forEach(instanceId => {
-        const instance = instances.find(inst => inst.InstanceId === instanceId);
-        if (instance && instance.State === "running") {
-          newSet.add(instanceId);
-        }
-      });
-      return newSet;
-    });
-  }, [instances]);
+  }, [instances])
 
   const handleKeepOnlyStopped = useCallback(() => {
-    setSelectedInstances(prev => {
-      const newSet = new Set<string>();
-      Array.from(prev).forEach(instanceId => {
-        const instance = instances.find(inst => inst.InstanceId === instanceId);
+    setSelectedInstances((prev) => {
+      const newSet = new Set<string>()
+      Array.from(prev).forEach((instanceId) => {
+        const instance = instances.find((inst) => inst.InstanceId === instanceId)
         if (instance && instance.State === "stopped") {
-          newSet.add(instanceId);
+          newSet.add(instanceId)
         }
-      });
-      return newSet;
-    });
-  }, [instances]);
+      })
+      return newSet
+    })
+  }, [instances])
 
   const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>((acc, inst) => {
     const key = inst.ServiceType || "Unknown"
@@ -705,20 +1027,21 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
     return acc
   }, {})
 
-  // Order the service types: Splunk first, then others
   const orderedServiceTypes = Object.keys(groupedInstances).sort((a, b) => {
-    if (a === "Splunk") return -1 // Splunk comes first
-    if (b === "Splunk") return 1 // Splunk comes first
-    return 0 // Maintain original order for others
+    if (a === "Splunk") return -1
+    if (b === "Splunk") return 1
+    return 0
   })
 
-  // Determine the state of selected instances for conditional bulk actions
-  const selectedInstanceDetails = Array.from(selectedInstances).map(id => instances.find(inst => inst.InstanceId === id)).filter(Boolean) as EC2Instance[];
-  
-  const allSelectedStopped = selectedInstanceDetails.length > 0 && selectedInstanceDetails.every(inst => inst.State === "stopped");
-  const allSelectedRunning = selectedInstanceDetails.length > 0 && selectedInstanceDetails.every(inst => inst.State === "running");
-  const hasMixedStates = selectedInstances.size > 0 && (!allSelectedStopped && !allSelectedRunning);
+  const selectedInstanceDetails = Array.from(selectedInstances)
+    .map((id) => instances.find((inst) => inst.InstanceId === id))
+    .filter(Boolean) as EC2Instance[]
 
+  const allSelectedStopped =
+    selectedInstanceDetails.length > 0 && selectedInstanceDetails.every((inst) => inst.State === "stopped")
+  const allSelectedRunning =
+    selectedInstanceDetails.length > 0 && selectedInstanceDetails.every((inst) => inst.State === "running")
+  const hasMixedStates = selectedInstances.size > 0 && !allSelectedStopped && !allSelectedRunning
 
   const formatFloatHours = (hours: number): string => {
     const h = Math.floor(hours)
@@ -753,14 +1076,14 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
         </button>
       </div>
 
-      {/* Show "No Servers" message when instances array is empty */}
       {instances.length === 0 && !loading ? (
         <div className="text-center py-16">
           <div className="max-w-md mx-auto bg-white border border-gray-200 shadow-lg rounded-2xl p-8">
             <h3 className="text-2xl font-semibold text-gray-800 mb-3">You don't have any servers here.</h3>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
               <p className="text-gray-700 text-sm leading-relaxed">
-                It looks like you don't have a lab assigned yet. Choose a plan to get started with your personalized lab setup.
+                It looks like you don't have a lab assigned yet. Choose a plan to get started with your personalized lab
+                setup.
               </p>
             </div>
             <button
@@ -777,12 +1100,11 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
         </div>
       ) : (
         <>
-          {/* Bulk Actions Bar */}
           {selectedInstances.size > 0 && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex flex-wrap gap-2 items-center">
                 <span className="text-sm font-medium text-blue-800">
-                  {selectedInstances.size} server{selectedInstances.size > 1 ? 's' : ''} selected:
+                  {selectedInstances.size} server{selectedInstances.size > 1 ? "s" : ""} selected:
                 </span>
                 {allSelectedStopped && renderBulkButton("Start", "start")}
                 {allSelectedRunning && (
@@ -829,15 +1151,13 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
             </div>
           )}
 
-          {/* 🔽 Split by ServiceType */}
           {orderedServiceTypes.map((serviceType) => {
             const serviceInstances = groupedInstances[serviceType]
-            const selectedInService = serviceInstances.filter(inst => selectedInstances.has(inst.InstanceId)).length
+            const selectedInService = serviceInstances.filter((inst) => selectedInstances.has(inst.InstanceId)).length
             const allSelectedInService = selectedInService === serviceInstances.length
             const someSelectedInService = selectedInService > 0 && selectedInService < serviceInstances.length
-
-            // Determine if all usage rows for this service type are expanded
-            const allUsageRowsExpanded = serviceInstances.every(inst => expandedUsageRows[inst.InstanceId]);
+            const allUsageRowsExpanded = serviceInstances.every((inst) => expandedUsageRows[inst.InstanceId])
+            const clusterInfo = hasCompleteClusterSet(serviceInstances)
 
             return (
               <div key={serviceType} style={{ marginBottom: 40 }}>
@@ -845,10 +1165,26 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                   <h3 className="text-md font-semibold text-green-600">
                     {serviceType} Servers
                     {serviceType === "Splunk" && (
-                      <span className="text-gray-500 text-sm font-normal ml-2">(username: admin, password: admin123)</span>
+                      <span className="text-gray-500 text-sm font-normal ml-2">
+                        (username: admin, password: admin123)
+                      </span>
                     )}
                   </h3>
                   <div className="flex items-center gap-2">
+                    {clusterInfo.hasComplete && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleClusterConfiguration(serviceInstances)
+                        }}
+                        className="flex items-center gap-2 px-3 py-1 text-sm bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 text-white rounded-md transition-all duration-300 shadow-md hover:shadow-lg font-medium"
+                        title="Configure Cluster"
+                      >
+                        <Database size={16} />
+                        Cluster Config
+                      </button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.preventDefault()
@@ -856,7 +1192,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                         toggleExpiryColumn(serviceType)
                       }}
                       className="flex items-center gap-2 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                      title={`${showExpiryColumn[serviceType] ? 'Hide' : 'Show'} Expiry`}
+                      title={`${showExpiryColumn[serviceType] ? "Hide" : "Show"} Expiry`}
                     >
                       {showExpiryColumn[serviceType] ? <EyeOff size={16} /> : <Eye size={16} />}
                       Expiry
@@ -865,11 +1201,11 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        const newState = !allUsageRowsExpanded; // Toggle based on current state of all
-                        serviceInstances.forEach(inst => {
-                          setExpandedUsageRows(prev => ({
+                        const newState = !allUsageRowsExpanded
+                        serviceInstances.forEach((inst) => {
+                          setExpandedUsageRows((prev) => ({
                             ...prev,
-                            [inst.InstanceId]: newState
+                            [inst.InstanceId]: newState,
                           }))
                         })
                       }}
@@ -909,7 +1245,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                           <input
                             type="checkbox"
                             checked={allSelectedInService}
-                            ref={input => {
+                            ref={(input) => {
                               if (input) input.indeterminate = someSelectedInService
                             }}
                             onChange={(e) => {
@@ -924,9 +1260,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                         <th style={{ padding: "10px" }}>Private IP</th>
                         <th style={{ padding: "10px" }}>Public IP</th>
                         <th style={{ padding: "10px" }}>SSH Command</th>
-                        {showExpiryColumn[serviceType] && (
-                          <th style={{ padding: "10px" }}>Expiry</th>
-                        )}
+                        {showExpiryColumn[serviceType] && <th style={{ padding: "10px" }}>Expiry</th>}
                         <th style={{ padding: "10px" }}>Actions</th>
                       </tr>
                     </thead>
@@ -937,7 +1271,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                         const isRunning = state === "running"
                         const isMutedState = ["pending", "starting"].includes(state)
                         const isBusyState = ["pending", "starting", "stopping", "rebooting"].includes(state)
-                        const showToggle = ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(inst.Name) // Show toggle for these names
+                        const showToggle = ["MYSQL", "Jenkins", "MSSQL", "OSSEC", "OpenVPN"].includes(inst.Name)
                         const isWindowsADDNS = inst.Name === "Windows(AD&DNS)"
                         const isSelected = selectedInstances.has(inst.InstanceId)
 
@@ -958,7 +1292,6 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                               <td style={{ padding: "10px" }}>
                                 <div className="flex items-center gap-2">
                                   <span>{inst.Name}</span>
-                                  {/* Toggle for general row expansion (credentials) */}
                                   {showToggle && (
                                     <button
                                       onClick={(e) => {
@@ -969,7 +1302,11 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                                       className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
                                       title="Toggle Credentials"
                                     >
-                                      {expandedCredentials[inst.InstanceId] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                      {expandedCredentials[inst.InstanceId] ? (
+                                        <ChevronUp size={16} />
+                                      ) : (
+                                        <ChevronDown size={16} />
+                                      )}
                                     </button>
                                   )}
                                 </div>
@@ -995,7 +1332,7 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                                 {isWindowsADDNS
                                   ? "-"
                                   : inst.State === "running" && inst.PublicIp && inst.SSHCommand
-                                    ? renderCopyField(inst.SSHCommand, `${inst.InstanceId}_ssh`, true) // Truncate SSH command
+                                    ? renderCopyField(inst.SSHCommand, `${inst.InstanceId}_ssh`, true)
                                     : "-"}
                               </td>
                               {showExpiryColumn[serviceType] && (
@@ -1011,7 +1348,11 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                                       className="p-1 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
                                       title="Toggle Usage Details"
                                     >
-                                      {expandedUsageRows[inst.InstanceId] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                      {expandedUsageRows[inst.InstanceId] ? (
+                                        <ChevronUp size={14} />
+                                      ) : (
+                                        <ChevronDown size={14} />
+                                      )}
                                     </button>
                                   </div>
                                 </td>
@@ -1025,11 +1366,13 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                                   alignItems: "center",
                                 }}
                               >
-                                {!isMutedState && isStopped && renderButton("Start", "start", inst.InstanceId)}
+                                {!isMutedState &&
+                                  isStopped &&
+                                  renderButton("Start", "start", inst.InstanceId, inst.Name)}
                                 {!isMutedState && isRunning && (
                                   <>
-                                    {renderButton("Stop", "stop", inst.InstanceId)}
-                                    {renderButton("Reboot", "reboot", inst.InstanceId)}
+                                    {renderButton("Stop", "stop", inst.InstanceId, inst.Name)}
+                                    {renderButton("Reboot", "reboot", inst.InstanceId, inst.Name)}
                                   </>
                                 )}
                                 {isWindowsADDNS && inst.State === "running" && (
@@ -1045,19 +1388,22 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                                         passwordModal.loading || isPasswordRateLimited
                                           ? "#9ca3af"
                                           : actionStyles["get-password"].backgroundColor,
-                                      cursor: passwordModal.loading || isPasswordRateLimited ? "not-allowed" : "pointer",
+                                      cursor:
+                                        passwordModal.loading || isPasswordRateLimited ? "not-allowed" : "pointer",
                                       opacity: passwordModal.loading || isPasswordRateLimited ? 0.6 : 1,
                                       display: "inline-flex",
                                       alignItems: "center",
                                       gap: "6px",
-                                      position: "relative", // For positioning the counter
+                                      position: "relative",
                                     }}
                                     disabled={passwordModal.loading || isPasswordRateLimited}
-                                    title={
-                                      isPasswordRateLimited ? `Try again in ${formatRemainingTime(remainingTime)}` : undefined
-                                    }
+                                    title={getButtonTooltip("get-password", inst.InstanceId, inst.Name)}
                                   >
-                                    {passwordModal.loading ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />}
+                                    {passwordModal.loading ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <Key size={14} />
+                                    )}
                                     {isPasswordRateLimited ? formatRemainingTime(remainingTime) : "Get Password"}
                                     <span className="absolute -top-2 -right-2 bg-blue-700 text-white text-xs font-bold rounded-full h-5 w-auto min-w-[20px] px-1 flex items-center justify-center">
                                       {MAX_PASSWORD_CLICKS - passwordClickCount}/{MAX_PASSWORD_CLICKS}
@@ -1068,7 +1414,10 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                             </tr>
                             {expandedCredentials[inst.InstanceId] && (
                               <tr id={`details-${inst.InstanceId}`} className="bg-gray-50 dark:bg-gray-800">
-                                <td colSpan={showExpiryColumn[serviceType] ? 8 : 7} style={{ padding: "10px 10px 10px 20px" }}>
+                                <td
+                                  colSpan={showExpiryColumn[serviceType] ? 8 : 7}
+                                  style={{ padding: "10px 10px 10px 20px" }}
+                                >
                                   <div className="text-xs text-gray-700 dark:text-gray-300 flex flex-wrap gap-x-4 gap-y-1">
                                     {inst.Name === "MYSQL" && (
                                       <>
@@ -1127,67 +1476,75 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
                                 </td>
                               </tr>
                             )}
-                            {expandedUsageRows[inst.InstanceId] && (() => {
-                              const usageDetails = getInstanceUsageDetails(inst.InstanceId)
-                              return usageDetails ? (
-                                <tr className="bg-blue-50 dark:bg-blue-900/20">
-                                  <td colSpan={showExpiryColumn[serviceType] ? 8 : 7} style={{ padding: "10px 10px 10px 20px" }}>
-                                    <div className="text-sm">
-                                      <div className="flex justify-between items-center mb-2">
-                                        <h4 className="font-semibold text-blue-800">Usage Summary</h4>
-                                        <button
-                                          onClick={(e) => {
-                                            e.preventDefault()
-                                            e.stopPropagation()
-                                            fetchUsageSummary()
-                                          }} // Call the passed function
-                                          disabled={isRefreshingUsage} // Use the passed state
-                                          className={`p-1 rounded-full ${
-                                            isRefreshingUsage ? "bg-gray-400 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600 text-gray-700"
-                                          } text-white`}
-                                          title="Refresh Usage"
-                                        >
-                                          <RefreshCcw className={`w-4 h-4 ${isRefreshingUsage ? "animate-spin" : ""}`} />
-                                        </button>
-                                      </div>
-                                      {(usageDetails.balance_hours <= 0 || usageDetails.balance_days <= 0) && (
-                                        <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-3 py-1 mb-2 text-sm">
-                                          ⚠️ <strong>Quota exhausted.</strong> Server will be terminated soon.
+                            {expandedUsageRows[inst.InstanceId] &&
+                              (() => {
+                                const usageDetails = getInstanceUsageDetails(inst.InstanceId)
+                                return usageDetails ? (
+                                  <tr className="bg-blue-50 dark:bg-blue-900/20">
+                                    <td
+                                      colSpan={showExpiryColumn[serviceType] ? 8 : 7}
+                                      style={{ padding: "10px 10px 10px 20px" }}
+                                    >
+                                      <div className="text-sm">
+                                        <div className="flex justify-between items-center mb-2">
+                                          <h4 className="font-semibold text-blue-800">Usage Summary</h4>
+                                          <button
+                                            onClick={(e) => {
+                                              e.preventDefault()
+                                              e.stopPropagation()
+                                              fetchUsageSummary()
+                                            }}
+                                            disabled={isRefreshingUsage}
+                                            className={`p-1 rounded-full ${
+                                              isRefreshingUsage
+                                                ? "bg-gray-400 cursor-not-allowed"
+                                                : "bg-amber-500 hover:bg-amber-600 text-gray-700"
+                                            } text-white`}
+                                            title="Refresh Usage"
+                                          >
+                                            <RefreshCcw
+                                              className={`w-4 h-4 ${isRefreshingUsage ? "animate-spin" : ""}`}
+                                            />
+                                          </button>
                                         </div>
-                                      )}
-                                      <div
-                                        className={`flex flex-wrap items-center gap-x-4 gap-y-1 rounded px-3 py-2 text-sm ${
-                                          usageDetails.balance_hours <= 0 || usageDetails.balance_days <= 0
-                                            ? "bg-red-50 border border-red-200 text-red-800"
-                                            : "bg-green-50 border border-green-200 text-gray-800"
-                                        }`}
-                                      >
-                                        <span>
-                                          <strong>Quota:</strong> {formatFloatHours(usageDetails.quota_hours)} hrs
-                                        </span>
-                                        <span>
-                                          <strong>Used:</strong> {formatFloatHours(usageDetails.used_hours)} hrs
-                                        </span>
-                                        <span>
-                                          <strong>Left:</strong> {formatFloatHours(usageDetails.balance_hours)} hrs
-                                        </span>
-                                        <span className="text-gray-400">|</span>
-                                        <span>
-                                          <strong>Valid:</strong> {usageDetails.quota_days} days
-                                        </span>
-                                        <span>
-                                          <strong>Start:</strong> {usageDetails.plan_start_date || "N/A"}
-                                        </span>
-                                        <span className="flex items-center gap-2">
-                                          <strong>End:</strong> {usageDetails.plan_end_date || "N/A"}
-                                          <span className="text-red-500">(terminate)</span>
-                                        </span>
+                                        {(usageDetails.balance_hours <= 0 || usageDetails.balance_days <= 0) && (
+                                          <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-3 py-1 mb-2 text-sm">
+                                            ⚠️ <strong>Quota exhausted.</strong> Server will be terminated soon.
+                                          </div>
+                                        )}
+                                        <div
+                                          className={`flex flex-wrap items-center gap-x-4 gap-y-1 rounded px-3 py-2 text-sm ${
+                                            usageDetails.balance_hours <= 0 || usageDetails.balance_days <= 0
+                                              ? "bg-red-50 border border-red-200 text-red-800"
+                                              : "bg-green-50 border border-green-200 text-gray-800"
+                                          }`}
+                                        >
+                                          <span>
+                                            <strong>Quota:</strong> {formatFloatHours(usageDetails.quota_hours)} hrs
+                                          </span>
+                                          <span>
+                                            <strong>Used:</strong> {formatFloatHours(usageDetails.used_hours)} hrs
+                                          </span>
+                                          <span>
+                                            <strong>Left:</strong> {formatFloatHours(usageDetails.balance_hours)} hrs
+                                          </span>
+                                          <span className="text-gray-400">|</span>
+                                          <span>
+                                            <strong>Valid:</strong> {usageDetails.quota_days} days
+                                          </span>
+                                          <span>
+                                            <strong>Start:</strong> {usageDetails.plan_start_date || "N/A"}
+                                          </span>
+                                          <span className="flex items-center gap-2">
+                                            <strong>End:</strong> {usageDetails.plan_end_date || "N/A"}
+                                            <span className="text-red-500">(terminate)</span>
+                                          </span>
+                                        </div>
                                       </div>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ) : null
-                            })()}
+                                    </td>
+                                  </tr>
+                                ) : null
+                              })()}
                           </React.Fragment>
                         )
                       })}
@@ -1200,16 +1557,16 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
         </>
       )}
 
-      {/* Password Display Modal - Stabilized */}
-      <Dialog 
-        open={passwordModal.isOpen} 
+      {/* Password Display Modal */}
+      <Dialog
+        open={passwordModal.isOpen}
         onOpenChange={(open) => {
           if (!open) {
             handleClosePasswordModal()
           }
         }}
       >
-        <DialogContent 
+        <DialogContent
           className="w-[95vw] max-w-md mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 max-h-[90vh] flex flex-col overflow-hidden"
           onPointerDownOutside={(e) => {
             e.preventDefault()
@@ -1340,6 +1697,164 @@ const EC2Table: React.FC<EC2TableProps> = ({ email, instances, setInstances, loa
               >
                 Close
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cluster Configuration Modal */}
+      <Dialog
+        open={clusterConfigModal.isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseClusterModal()
+          }
+        }}
+      >
+        <DialogContent
+          className="w-[95vw] max-w-md mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 max-h-[90vh] flex flex-col overflow-hidden"
+          onPointerDownOutside={(e) => {
+            e.preventDefault()
+          }}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault()
+          }}
+        >
+          <DialogHeader className="relative bg-gradient-to-r from-yellow-50 to-yellow-100 dark:bg-gray-800 p-6 pb-4 rounded-t-2xl flex-shrink-0">
+            <div className="text-center pr-12">
+              <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white">
+                Cluster Configuration
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 dark:text-gray-400 text-sm mt-2">
+                Configure your Splunk cluster deployment
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+
+          <div
+            className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent hover:scrollbar-thumb-gray-300 p-6"
+            onWheel={(e) => {
+              e.stopPropagation()
+            }}
+          >
+            {clusterConfigModal.success ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                  <Database className="w-8 h-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-green-600 mb-2">Success!</h3>
+                <p className="text-gray-600 dark:text-gray-400">Your Cluster configuration started successfully!</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                  All cluster server actions are now frozen for 20 minutes while the configuration is being applied.
+                </p>
+              </div>
+            ) : (
+              <>
+                {clusterConfigModal.error && (
+                  <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p className="text-red-600 dark:text-red-400 text-sm font-medium mb-2">Error:</p>
+                    <p className="text-red-600 dark:text-red-400 text-sm whitespace-pre-wrap">
+                      {clusterConfigModal.error}
+                    </p>
+                    {clusterConfigModal.error.includes("is not running") && (
+                      <>
+                        <p className="text-red-600 dark:text-red-400 text-sm mt-2 font-medium">
+                          Please start all the instances before configuring the cluster.
+                        </p>
+                        <div className="mt-3">
+                          <Button
+                            onClick={handleStartAllClusterInstances}
+                            disabled={clusterConfigModal.startingInstances}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2"
+                          >
+                            {clusterConfigModal.startingInstances ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Starting Instances...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-4 h-4" />
+                                Start All Instances
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Username:</label>
+                    <input
+                      type="text"
+                      value={clusterConfigModal.username}
+                      onChange={(e) => setClusterConfigModal((prev) => ({ ...prev, username: e.target.value }))}
+                      disabled={!clusterConfigModal.editableUsername}
+                      className={`w-full px-3 py-2 border rounded-lg ${
+                        clusterConfigModal.editableUsername
+                          ? "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                          : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+                      } text-gray-900 dark:text-white`}
+                    />
+                    {clusterConfigModal.editableUsername && (
+                      <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                        Please correct the username to match your instance names
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email:</label>
+                    <input
+                      type="email"
+                      value={clusterConfigModal.email}
+                      onChange={(e) => setClusterConfigModal((prev) => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex-shrink-0 bg-white dark:bg-gray-900 p-6 rounded-b-2xl border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end gap-3">
+              {clusterConfigModal.success ? (
+                <Button
+                  onClick={handleCloseClusterModal}
+                  className="px-8 py-2 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Close
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    onClick={handleCloseClusterModal}
+                    variant="outline"
+                    disabled={clusterConfigModal.loading}
+                    className="px-6 py-2 bg-transparent"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleClusterConfigSubmit}
+                    disabled={clusterConfigModal.loading || !clusterConfigModal.username || !clusterConfigModal.email}
+                    className="px-6 py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                  >
+                    {clusterConfigModal.loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Configuring...
+                      </>
+                    ) : (
+                      "Proceed"
+                    )}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </DialogContent>
