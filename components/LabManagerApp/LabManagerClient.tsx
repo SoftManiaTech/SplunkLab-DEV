@@ -375,7 +375,7 @@ function LabManagerClient(): JSX.Element {
 
               <p className="mt-3 text-sm text-gray-500">
                 Trouble accessing your server? Email{" "}
-                <a href="mailto:labsupport@softmania.in" className="text-teal-600 underline">
+                <a href="mailto:labsupport@softmania.in" className="text-blue-600 underline">
                   labsupport@softmania.in
                 </a>
                 .
