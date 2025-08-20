@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import axios from "axios"
 import {
   Copy,
@@ -16,6 +16,7 @@ import {
   Play,
   AlertCircle,
   MessageCircle,
+  CheckCircle,
 } from "lucide-react"
 import { logToSplunk } from "@/lib/splunklogger"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -30,6 +31,21 @@ interface EC2Instance {
   SSHCommand: string
   Region: string
   ServiceType: string
+  PublicIpAddress?: string
+}
+
+interface ClusterInstance {
+  InstanceId: string
+  Name: string
+  State: string
+  PublicIpAddress?: string
+  PrivateIpAddress?: string
+}
+
+interface SplunkValidationResult {
+  ip: string
+  status: "UP" | "DOWN"
+  details: string
 }
 
 interface EC2TableProps {
@@ -104,6 +120,11 @@ const EC2Table: React.FC<EC2TableProps> = ({
     licenseError: null as string | null,
     needsLicenseUpload: false,
     managementServerNotFound: false,
+    stoppedInstances: [] as any[],
+    splunkValidationTimer: 0,
+    splunkValidationInProgress: false,
+    splunkValidationResults: null as any,
+    showProceedAfterTimer: false,
   })
 
   // Specific cluster instance freeze state (instead of global)
@@ -119,12 +140,12 @@ const EC2Table: React.FC<EC2TableProps> = ({
   })
 
   // Helper function to format milliseconds into MM:SS
-  const formatRemainingTime = (ms: number): string => {
+  const formatRemainingTime = useCallback((ms: number): string => {
     const totalSeconds = Math.max(0, Math.floor(ms / 1000))
     const minutes = Math.floor(totalSeconds / 60)
     const seconds = totalSeconds % 60
     return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-  }
+  }, [])
 
   // Function to get expiry date for an instance
   const getInstanceExpiryDate = (instanceId: string): string => {
@@ -216,16 +237,22 @@ const EC2Table: React.FC<EC2TableProps> = ({
   }
 
   // Helper function to get cluster instances for a specific username
-  const getClusterInstancesForUsername = (username: string) => {
-    return instances.filter((inst) => inst.Name.startsWith(username) && isClusterInstance(inst.Name))
-  }
+  const getClusterInstancesForUsername = useCallback(
+    (username: string) => {
+      return instances.filter((inst) => inst.Name.startsWith(username) && isClusterInstance(inst.Name))
+    },
+    [instances],
+  )
 
   // Helper function to check if instance is frozen
-  const isInstanceFrozen = (instanceId: string) => {
-    const endTime = frozenClusterInstances[instanceId]
-    if (!endTime) return false
-    return Date.now() < endTime
-  }
+  const isInstanceFrozen = useCallback(
+    (instanceId: string) => {
+      const endTime = frozenClusterInstances[instanceId]
+      if (!endTime) return false
+      return Date.now() < endTime
+    },
+    [frozenClusterInstances],
+  )
 
   // Helper function to calculate notification dot urgency
   const getNotificationUrgency = (instanceId: string) => {
@@ -344,6 +371,252 @@ const EC2Table: React.FC<EC2TableProps> = ({
     },
     [instances, email],
   )
+
+  const fetchInstances = useCallback(async () => {
+    try {
+      setRefreshing(true)
+      const res = await axios.get(`${apiUrl}/instances`, {
+        headers: { Authorization: `Bearer ${email}` },
+      })
+      setInstances(res.data)
+
+      await logToSplunk({
+        session: email,
+        action: "lab_instance_refresh",
+        details: { total_instances: res.data.length },
+      })
+    } catch (error) {
+      console.error("Error fetching instances:", error)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [apiUrl, email, setInstances])
+
+  const fetchFreshInstanceData = useCallback(async () => {
+    try {
+      const res = await axios.get(`${apiUrl}/instances`, {
+        headers: { Authorization: `Bearer ${email}` },
+      })
+      return res.data
+    } catch (error) {
+      console.error("Error fetching instances:", error)
+      return []
+    }
+  }, [apiUrl, email])
+
+  const validateSplunkInstallation = useCallback(
+    async (username: string) => {
+      try {
+        // Get fresh instance data
+        const freshInstances = await fetchFreshInstanceData()
+        const clusterInstances = freshInstances.filter(
+          (inst: ClusterInstance) => inst.Name && inst.Name.toLowerCase().includes(username.toLowerCase()),
+        )
+
+        const runningInstances = clusterInstances.filter(
+          (inst: ClusterInstance) => inst.State && inst.State.toLowerCase() === "running",
+        )
+
+        if (runningInstances.length === 0) {
+          const currentStates = clusterInstances
+            .map((inst: ClusterInstance) => `${inst.Name}: ${inst.State}`)
+            .join(", ")
+          throw new Error(`No running servers found for Splunk validation. Current states: ${currentStates}`)
+        }
+
+        const publicIps = runningInstances
+          .map((inst: ClusterInstance) => inst.PublicIpAddress)
+          .filter((ip): ip is string => Boolean(ip && ip.trim()))
+
+        if (publicIps.length === 0) {
+          const serverNames = runningInstances.map((inst: ClusterInstance) => inst.Name).join(", ")
+          throw new Error(`No public IPs found for running servers: ${serverNames}`)
+        }
+
+        console.log("[v0] Calling /splunk-validate with public IPs:", publicIps)
+
+        const response = await fetch("/api/lab-proxy", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-email": email,
+          },
+          body: JSON.stringify({
+            path: "/splunk-validate",
+            method: "POST",
+            body: {
+              public_ips: publicIps,
+            },
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`API call failed: ${response.status} ${response.statusText}`)
+        }
+
+        const data = await response.json()
+        console.log("[v0] Splunk validation response:", data)
+
+        return { success: true, results: data.results, instances: runningInstances }
+      } catch (error) {
+        console.error("Splunk validation error:", error)
+        throw error
+      }
+    },
+    [email, fetchFreshInstanceData],
+  )
+
+  const proceedToLicenseValidation = useCallback(async () => {
+    setClusterConfigModal((prev) => ({
+      ...prev,
+      loading: true,
+      checkingLicense: true,
+      error: null,
+    }))
+
+    try {
+      // Call the license validation
+      const licenseValidation = await validateSplunkLicense(clusterConfigModal.username)
+
+      if (licenseValidation.valid) {
+        setClusterConfigModal((prev) => ({
+          ...prev,
+          loading: false,
+          checkingLicense: false,
+          success: true,
+          error: null,
+        }))
+      } else if (licenseValidation.needsLicenseUpload) {
+        setClusterConfigModal((prev) => ({
+          ...prev,
+          loading: false,
+          checkingLicense: false,
+          needsLicenseUpload: true,
+          error: "License upload required for this cluster configuration.",
+        }))
+      } else {
+        setClusterConfigModal((prev) => ({
+          ...prev,
+          loading: false,
+          checkingLicense: false,
+          error: "License validation failed. Please check your cluster configuration.",
+        }))
+      }
+    } catch (error) {
+      console.error("License validation error:", error)
+      setClusterConfigModal((prev) => ({
+        ...prev,
+        loading: false,
+        checkingLicense: false,
+        error: error instanceof Error ? error.message : "License validation failed. Please try again.",
+      }))
+    }
+  }, [clusterConfigModal.username, validateSplunkLicense])
+
+  const handleClusterConfigSubmit = useCallback(async () => {
+    setClusterConfigModal((prev) => ({
+      ...prev,
+      loading: true,
+      error: null,
+      success: false,
+      splunkValidationInProgress: false,
+      splunkValidationResults: null,
+      showProceedAfterTimer: false,
+    }))
+
+    try {
+      // First, get fresh instance data to check server states
+      const freshInstances = await fetchFreshInstanceData()
+      const clusterInstances = freshInstances.filter(
+        (inst: ClusterInstance) =>
+          inst.Name && inst.Name.toLowerCase().includes(clusterConfigModal.username.toLowerCase()),
+      )
+
+      const stoppedInstances = clusterInstances.filter(
+        (inst: ClusterInstance) => inst.State && inst.State.toLowerCase() !== "running",
+      )
+
+      // If there are stopped instances, show them and allow starting
+      if (stoppedInstances.length > 0) {
+        setClusterConfigModal((prev) => ({
+          ...prev,
+          loading: false,
+          stoppedInstances,
+          managementServerNotFound: true,
+          error: `Please start all cluster servers before configuring the cluster.`,
+        }))
+        return
+      }
+
+      // All servers are running, proceed with Splunk validation
+      setClusterConfigModal((prev) => ({
+        ...prev,
+        splunkValidationInProgress: true,
+      }))
+
+      const splunkValidation = await validateSplunkInstallation(clusterConfigModal.username)
+
+      // Check if all servers have Splunk installed
+      const downServers = splunkValidation.results.filter((result: SplunkValidationResult) => result.status === "DOWN")
+
+      if (downServers.length > 0) {
+        const downServerDetails = downServers
+          .map((server: SplunkValidationResult) => {
+            const instance = splunkValidation.instances.find(
+              (inst: ClusterInstance) => inst.PublicIpAddress === server.ip,
+            )
+            return `${instance?.Name || server.ip}: Splunk not installed`
+          })
+          .join(", ")
+
+        setClusterConfigModal((prev) => ({
+          ...prev,
+          loading: false,
+          splunkValidationInProgress: false,
+          error: `Splunk installation required on: ${downServerDetails}`,
+        }))
+        return
+      }
+
+      // All servers have Splunk installed, start 15-second timer
+      setClusterConfigModal((prev) => ({
+        ...prev,
+        loading: false,
+        splunkValidationInProgress: false,
+        splunkValidationResults: splunkValidation.results,
+        splunkValidationTimer: 15,
+      }))
+
+      // Start countdown timer
+      const timer = setInterval(() => {
+        setClusterConfigModal((prev) => {
+          if (prev.splunkValidationTimer <= 1) {
+            clearInterval(timer)
+            return {
+              ...prev,
+              splunkValidationTimer: 0,
+              showProceedAfterTimer: true,
+            }
+          }
+          return {
+            ...prev,
+            splunkValidationTimer: prev.splunkValidationTimer - 1,
+          }
+        })
+      }, 1000)
+    } catch (error) {
+      console.error("Cluster configuration error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to configure cluster. Please try again."
+
+      setClusterConfigModal((prev) => ({
+        ...prev,
+        loading: false,
+        splunkValidationInProgress: false,
+        error: errorMessage,
+        success: false,
+      }))
+    }
+  }, [clusterConfigModal.username, clusterConfigModal.email, email, validateSplunkInstallation, fetchFreshInstanceData])
 
   // Effect to manage expanded states
   useEffect(() => {
@@ -562,59 +835,42 @@ const EC2Table: React.FC<EC2TableProps> = ({
     }
   }
 
-  const callAction = async (action: string, instanceId: string) => {
-    const instance = instances.find((inst) => inst.InstanceId === instanceId)
-    if (!instance) return
+  const callAction = useCallback(
+    async (action: string, instanceId: string) => {
+      const instance = instances.find((inst) => inst.InstanceId === instanceId)
+      if (!instance) return
 
-    try {
-      await axios.post(
-        "/api/lab-proxy",
-        {
-          path: `/${action}`,
-          method: "POST",
-          body: {
-            instance_id: instanceId,
-            region: instance.Region,
+      try {
+        await axios.post(
+          "/api/lab-proxy",
+          {
+            path: `/${action}`,
+            method: "POST",
+            body: {
+              instance_id: instanceId,
+              region: instance.Region,
+            },
           },
-        },
-        {
-          headers: { "x-user-email": email },
-        },
-      )
+          {
+            headers: { "x-user-email": email },
+          },
+        )
 
-      await logToSplunk({
-        session: email,
-        action: `lab_instance_${action}`,
-        details: {
-          instance_id: instanceId,
-          instance_name: instance.Name,
-          public_ip: instance.PublicIp || "N/A",
-        },
-      })
-    } catch (error) {
-      console.error(`Action ${action} failed:`, error)
-    }
-  }
-
-  const fetchInstances = async () => {
-    try {
-      setRefreshing(true)
-      const res = await axios.get(`${apiUrl}/instances`, {
-        headers: { Authorization: `Bearer ${email}` },
-      })
-      setInstances(res.data)
-
-      await logToSplunk({
-        session: email,
-        action: "lab_instance_refresh",
-        details: { total_instances: res.data.length },
-      })
-    } catch (error) {
-      console.error("Error fetching instances:", error)
-    } finally {
-      setRefreshing(false)
-    }
-  }
+        await logToSplunk({
+          session: email,
+          action: `lab_instance_${action}`,
+          details: {
+            instance_id: instanceId,
+            instance_name: instance.Name,
+            public_ip: instance.PublicIp || "N/A",
+          },
+        })
+      } catch (error) {
+        console.error(`Action ${action} failed:`, error)
+      }
+    },
+    [email, instances],
+  )
 
   useEffect(() => {
     let interval: NodeJS.Timeout
@@ -630,7 +886,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
         clearInterval(interval)
       }
     }
-  }, [email, hasLab, instances.length])
+  }, [email, hasLab, instances.length, fetchInstances])
 
   const handleCopy = useCallback((text: string, fieldId: string) => {
     navigator.clipboard.writeText(text)
@@ -745,8 +1001,8 @@ const EC2Table: React.FC<EC2TableProps> = ({
       disabledButtons,
       isPasswordRateLimited,
       remainingTime,
-      isInstanceFrozen,
       formatRemainingTime,
+      isInstanceFrozen,
     ],
   )
 
@@ -774,7 +1030,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
       }
       return `${action.charAt(0).toUpperCase() + action.slice(1)} all selected servers`
     },
-    [selectedInstances, frozenClusterRemainingTimes, stableTooltips, isInstanceFrozen, formatRemainingTime],
+    [selectedInstances, frozenClusterRemainingTimes, stableTooltips, formatRemainingTime, isInstanceFrozen],
   )
 
   const renderButton = (label: string, action: string, instanceId: string, instanceName = "") => {
@@ -884,6 +1140,11 @@ const EC2Table: React.FC<EC2TableProps> = ({
         licenseError: null,
         needsLicenseUpload: false,
         managementServerNotFound: false,
+        stoppedInstances: [] as any[],
+        splunkValidationTimer: 0,
+        splunkValidationInProgress: false,
+        splunkValidationResults: null as any,
+        showProceedAfterTimer: false,
       })
     },
     [email],
@@ -913,130 +1174,34 @@ const EC2Table: React.FC<EC2TableProps> = ({
       console.error("Error starting cluster instances:", error)
       setClusterConfigModal((prev) => ({ ...prev, startingInstances: false }))
     }
-  }, [clusterConfigModal.username])
+  }, [clusterConfigModal.username, callAction, fetchInstances, getClusterInstancesForUsername])
 
-  const handleClusterConfigSubmit = useCallback(async () => {
-    setClusterConfigModal((prev) => ({
-      ...prev,
-      loading: true,
-      error: null,
-      success: false,
-      checkingLicense: true,
-      licenseError: null,
-      needsLicenseUpload: false,
-      managementServerNotFound: false,
-    }))
+  const handleStartAllInstances = useCallback(
+    async (instancesToStart: EC2Instance[]) => {
+      setClusterConfigModal((prev) => ({ ...prev, startingInstances: true }))
 
-    try {
-      // First, validate the Splunk license
-      const licenseValidation = await validateSplunkLicense(clusterConfigModal.username)
+      try {
+        const promises = instancesToStart.map((inst) => callAction("start", inst.InstanceId))
+        await Promise.all(promises)
 
-      setClusterConfigModal((prev) => ({ ...prev, checkingLicense: false }))
+        // Refresh instances to get updated states
+        await fetchInstances()
 
-      if (!licenseValidation.valid) {
-        if (licenseValidation.needsLicenseUpload) {
-          setClusterConfigModal((prev) => ({
-            ...prev,
-            loading: false,
-            needsLicenseUpload: true,
-            licenseError:
-              "Please upload your enterprise license in your Management_server and restart the server before proceeding with cluster configuration.",
-          }))
-          return
-        }
-      }
-
-      // License is valid, proceed with cluster configuration
-      const response = await fetch("/api/lab-proxy", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-user-email": email,
-        },
-        body: JSON.stringify({
-          path: "/cluster-config",
-          method: "POST",
-          body: {
-            username: clusterConfigModal.username,
-            email: clusterConfigModal.email,
-          },
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.status === "success") {
-        // Success - freeze only cluster instances for 20 minutes
-        const now = Date.now()
-        const twentyMinutes = 20 * 60 * 1000
-        const endTime = now + twentyMinutes
-
-        const clusterInstances = getClusterInstancesForUsername(clusterConfigModal.username)
-        const newFrozenInstances: Record<string, number> = {}
-
-        clusterInstances.forEach((inst) => {
-          newFrozenInstances[inst.InstanceId] = endTime
-        })
-
-        setFrozenClusterInstances((prev) => ({ ...prev, ...newFrozenInstances }))
-
-        // Save to localStorage for persistence
-        localStorage.setItem(
-          `cluster-freeze-instances-${email}`,
-          JSON.stringify({ ...frozenClusterInstances, ...newFrozenInstances }),
-        )
-
-        // Log success
-        await logToSplunk({
-          session: email,
-          action: "cluster_configuration_success",
-          details: {
-            username: clusterConfigModal.username,
-            build_id: data.build_id,
-          },
-        })
-
+        // Clear the error after starting instances
         setClusterConfigModal((prev) => ({
           ...prev,
-          loading: false,
           error: null,
-          success: true,
+          startingInstances: false,
+          managementServerNotFound: false,
+          stoppedInstances: [],
         }))
-      } else if (data.error) {
-        if (data.error.includes("No instances found with matching Owner tag")) {
-          setClusterConfigModal((prev) => ({
-            ...prev,
-            loading: false,
-            error: data.error,
-            success: false,
-            editableUsername: true,
-          }))
-        } else {
-          setClusterConfigModal((prev) => ({
-            ...prev,
-            loading: false,
-            error: data.error,
-            success: false,
-          }))
-        }
+      } catch (error) {
+        console.error("Error starting cluster instances:", error)
+        setClusterConfigModal((prev) => ({ ...prev, startingInstances: false }))
       }
-    } catch (error) {
-      console.error("Cluster configuration error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to configure cluster. Please try again."
-
-      // Check if it's a management server not found error
-      const isManagementServerError = errorMessage.includes("Management server not found")
-
-      setClusterConfigModal((prev) => ({
-        ...prev,
-        loading: false,
-        checkingLicense: false,
-        error: errorMessage,
-        success: false,
-        managementServerNotFound: isManagementServerError,
-      }))
-    }
-  }, [clusterConfigModal.username, clusterConfigModal.email, email, frozenClusterInstances, validateSplunkLicense])
+    },
+    [callAction, fetchInstances],
+  )
 
   const handleCloseClusterModal = useCallback(() => {
     setClusterConfigModal({
@@ -1052,6 +1217,11 @@ const EC2Table: React.FC<EC2TableProps> = ({
       licenseError: null,
       needsLicenseUpload: false,
       managementServerNotFound: false,
+      stoppedInstances: [],
+      splunkValidationTimer: 0,
+      splunkValidationInProgress: false,
+      splunkValidationResults: null,
+      showProceedAfterTimer: false,
     })
   }, [])
 
@@ -1259,12 +1429,14 @@ const EC2Table: React.FC<EC2TableProps> = ({
     })
   }, [instances])
 
-  const groupedInstances = instances.reduce<Record<string, EC2Instance[]>>((acc, inst) => {
-    const key = inst.ServiceType || "Unknown"
-    if (!acc[key]) acc[key] = []
-    acc[key].push(inst)
-    return acc
-  }, {})
+  const groupedInstances = useMemo(() => {
+    return instances.reduce<Record<string, EC2Instance[]>>((acc, inst) => {
+      const key = inst.ServiceType || "Unknown"
+      if (!acc[key]) acc[key] = []
+      acc[key].push(inst)
+      return acc
+    }, {})
+  }, [instances])
 
   const orderedServiceTypes = Object.keys(groupedInstances).sort((a, b) => {
     if (a === "Splunk") return -1
@@ -2049,126 +2221,101 @@ const EC2Table: React.FC<EC2TableProps> = ({
                 <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
                   <Database className="w-8 h-8 text-green-600" />
                 </div>
-                <h3 className="text-xl font-semibold text-green-600 mb-2">Success!</h3>
-                <p className="text-gray-600 dark:text-gray-400">Your Cluster configuration started successfully!</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                  All cluster server actions are now frozen for 20 minutes while the configuration is being applied.
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Cluster Configuration Complete!
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                  Your Splunk cluster has been successfully configured and is ready for use.
                 </p>
               </div>
             ) : (
               <>
-                {clusterConfigModal.checkingLicense && (
-                  <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                      <div>
-                        <p className="text-blue-600 dark:text-blue-400 text-sm font-medium">Validating License</p>
-                        <p className="text-blue-600 dark:text-blue-400 text-xs">
-                          Checking Management_server license status...
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {clusterConfigModal.error && (
+                  <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <div className="flex items-start">
+                      <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-red-800 dark:text-red-200">Error:</p>
+                        <p className="text-sm text-red-700 dark:text-red-300 mt-1">{clusterConfigModal.error}</p>
 
-                {clusterConfigModal.needsLicenseUpload && (
-                  <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-                      <div>
-                        <p className="text-yellow-800 dark:text-yellow-200 text-sm font-medium mb-2">
-                          License Upload Required
-                        </p>
-                        <p className="text-yellow-700 dark:text-yellow-300 text-sm mb-3">
-                          {clusterConfigModal.licenseError}
-                        </p>
-                        <div className="bg-yellow-100 dark:bg-yellow-800/30 rounded-lg p-3 text-xs text-yellow-800 dark:text-yellow-200">
-                          <p className="font-medium mb-1">To upload your license:</p>
-                          <ol className="list-decimal list-inside space-y-1 ml-2">
-                            <li>Access your Management_server via web browser</li>
-                            <li>Login with admin/admin123</li>
-                            <li>Go to Settings → Licensing</li>
-                            <li>Upload your Enterprise license file</li>
-                            <li>
-                              <strong>Restart the Management_server</strong>
-                            </li>
-                            <li>Return here and try again</li>
-                          </ol>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {clusterConfigModal.managementServerNotFound && (
-                  <div className="mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5" />
-                      <div>
-                        <p className="text-orange-800 dark:text-orange-200 text-sm font-medium mb-2">
-                          Management Server Not Available
-                        </p>
-                        <p className="text-orange-700 dark:text-orange-300 text-sm mb-3">{clusterConfigModal.error}</p>
-                        <div className="mt-3">
-                          <Button
-                            onClick={handleStartAllClusterInstances}
-                            disabled={clusterConfigModal.startingInstances}
-                            className="w-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2"
-                          >
-                            {clusterConfigModal.startingInstances ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Starting All Servers...
-                              </>
-                            ) : (
-                              <>
-                                <Play className="w-4 h-4" />
-                                Start All Servers
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {clusterConfigModal.error &&
-                  !clusterConfigModal.needsLicenseUpload &&
-                  !clusterConfigModal.managementServerNotFound && (
-                    <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                      <p className="text-red-600 dark:text-red-400 text-sm font-medium mb-2">Error:</p>
-                      <p className="text-red-600 dark:text-red-400 text-sm whitespace-pre-wrap">
-                        {clusterConfigModal.error}
-                      </p>
-                      {clusterConfigModal.error.includes("is not running") && (
-                        <>
-                          <p className="text-red-600 dark:text-red-400 text-sm mt-2 font-medium">
-                            Please start all the instances before configuring the cluster.
-                          </p>
+                        {/* Show stopped servers list if any */}
+                        {clusterConfigModal.stoppedInstances.length > 0 && (
                           <div className="mt-3">
+                            <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">
+                              Servers to be started:
+                            </p>
+                            <ul className="space-y-1">
+                              {clusterConfigModal.stoppedInstances.map((instance) => (
+                                <li key={instance.InstanceId} className="text-sm text-red-700 dark:text-red-300">
+                                  • {instance.Name} ({instance.State})
+                                </li>
+                              ))}
+                            </ul>
                             <Button
-                              onClick={handleStartAllClusterInstances}
+                              onClick={() => handleStartAllInstances(clusterConfigModal.stoppedInstances)}
+                              className="mt-3 w-full bg-green-600 hover:bg-green-700 text-white"
                               disabled={clusterConfigModal.startingInstances}
-                              className="w-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2"
                             >
                               {clusterConfigModal.startingInstances ? (
                                 <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                  Starting Instances...
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Starting Servers...
                                 </>
                               ) : (
                                 <>
-                                  <Play className="w-4 h-4" />
-                                  Start All Instances
+                                  <Play className="w-4 h-4 mr-2" />
+                                  Start All Servers
                                 </>
                               )}
                             </Button>
                           </div>
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  )}
+                  </div>
+                )}
+
+                {clusterConfigModal.splunkValidationInProgress && (
+                  <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div className="flex items-center">
+                      <Loader2 className="w-5 h-5 text-blue-500 animate-spin mr-3" />
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        Validating Splunk installation on all cluster servers...
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {clusterConfigModal.splunkValidationResults && clusterConfigModal.splunkValidationTimer > 0 && (
+                  <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center mb-2">
+                      <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
+                      <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                        All cluster servers have Splunk installed!
+                      </p>
+                    </div>
+                    <p className="text-sm text-green-700 dark:text-green-300 mb-3">
+                      Waiting for Splunk services to be ready... ({clusterConfigModal.splunkValidationTimer}s)
+                    </p>
+                    <div className="w-full bg-green-200 dark:bg-green-800 rounded-full h-2">
+                      <div
+                        className="bg-green-600 h-2 rounded-full transition-all duration-1000"
+                        style={{ width: `${((15 - clusterConfigModal.splunkValidationTimer) / 15) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+
+                {clusterConfigModal.showProceedAfterTimer && (
+                  <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center">
+                      <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
+                      <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                        Please click to proceed with license validation
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   <div>
@@ -2177,18 +2324,12 @@ const EC2Table: React.FC<EC2TableProps> = ({
                       type="text"
                       value={clusterConfigModal.username}
                       onChange={(e) => setClusterConfigModal((prev) => ({ ...prev, username: e.target.value }))}
-                      disabled={!clusterConfigModal.editableUsername}
-                      className={`w-full px-3 py-2 border rounded-lg ${
-                        clusterConfigModal.editableUsername
-                          ? "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-                          : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
-                      } text-gray-900 dark:text-white`}
+                      disabled={true} // Always disabled as requested
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white rounded-lg"
                     />
-                    {clusterConfigModal.editableUsername && (
-                      <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                        Please correct the username to match your instance names
-                      </p>
-                    )}
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Auto-detected from your cluster instances
+                    </p>
                   </div>
 
                   <div>
@@ -2197,8 +2338,10 @@ const EC2Table: React.FC<EC2TableProps> = ({
                       type="email"
                       value={clusterConfigModal.email}
                       onChange={(e) => setClusterConfigModal((prev) => ({ ...prev, email: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      disabled={true} // Always disabled as requested
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white rounded-lg"
                     />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Your logged-in email address</p>
                   </div>
                 </div>
               </>
@@ -2210,7 +2353,7 @@ const EC2Table: React.FC<EC2TableProps> = ({
               {clusterConfigModal.success ? (
                 <Button
                   onClick={handleCloseClusterModal}
-                  className="px-8 py-2 bg-green-600 hover:bg-green-700 text-white"
+                  className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
                 >
                   Close
                 </Button>
@@ -2225,10 +2368,14 @@ const EC2Table: React.FC<EC2TableProps> = ({
                     Cancel
                   </Button>
                   <Button
-                    onClick={handleClusterConfigSubmit}
+                    onClick={
+                      clusterConfigModal.showProceedAfterTimer ? proceedToLicenseValidation : handleClusterConfigSubmit
+                    }
                     disabled={
                       clusterConfigModal.loading ||
                       clusterConfigModal.checkingLicense ||
+                      clusterConfigModal.splunkValidationInProgress ||
+                      (clusterConfigModal.splunkValidationTimer > 0 && !clusterConfigModal.showProceedAfterTimer) ||
                       !clusterConfigModal.username ||
                       !clusterConfigModal.email
                     }
@@ -2239,6 +2386,8 @@ const EC2Table: React.FC<EC2TableProps> = ({
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         {clusterConfigModal.checkingLicense ? "Checking License..." : "Configuring..."}
                       </>
+                    ) : clusterConfigModal.showProceedAfterTimer ? (
+                      "Proceed to License Validation"
                     ) : clusterConfigModal.needsLicenseUpload ? (
                       "Retry After License Upload"
                     ) : (
