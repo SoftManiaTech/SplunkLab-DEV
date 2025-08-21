@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation"
 import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from "@react-oauth/google"
 import { jwtDecode } from "jwt-decode"
 import EC2Table from "../LabManagerApp/components/EC2Table"
-import Link from "next/link"
 import * as CryptoJS from "crypto-js"
 import { DownloadIcon } from "lucide-react"
 import { event as sendToGA4 } from "@/lib/gtag" // Import GA4 logger
-import { logToSplunk } from "@/lib/splunklogger" // Import Splunk logger
 
 const getClientIp = async () => {
   try {
@@ -214,16 +212,6 @@ function LabManagerClient(): JSX.Element {
       // ✅ Send log to Splunk + GA4 for Google login
       try {
         const ip = await getClientIp() // same logic you used in page.tsx
-        await logToSplunk({
-          session: userEmail,
-          action: "google_login",
-          details: {
-            title: "User logged in with Google",
-            name: fullName,
-            email: userEmail,
-            ip,
-          },
-        })
         // Count logins per user in localStorage
         const loginKey = `google_login_count_${userEmail}`
         const currentCount = Number.parseInt(localStorage.getItem(loginKey) || "0", 10) + 1
@@ -388,19 +376,6 @@ function LabManagerClient(): JSX.Element {
                       <a
                         href={file.url}
                         download={file.filename}
-                        onClick={async () => {
-                          const ip = await getClientIp()
-                          await logToSplunk({
-                            session: email,
-                            action: "pem_download",
-                            details: {
-                              title: "PEM file downloaded",
-                              file: file.filename,
-                              email,
-                              ip,
-                            },
-                          })
-                        }}
                         className="text-green-600 hover:text-green-800 flex items-center gap-2"
                       >
                         <span className="hidden sm:inline">Download</span>

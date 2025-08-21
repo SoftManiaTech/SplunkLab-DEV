@@ -18,7 +18,6 @@ import {
   MessageCircle,
   CheckCircle,
 } from "lucide-react";
-import { logToSplunk } from "@/lib/splunklogger";
 import {
   Dialog,
   DialogContent,
@@ -1058,12 +1057,6 @@ const EC2Table: React.FC<EC2TableProps> = ({
         headers: { Authorization: `Bearer ${email}` },
       });
       setInstances(res.data);
-
-      await logToSplunk({
-        session: email,
-        action: "lab_instance_refresh",
-        details: { total_instances: res.data.length },
-      });
     } catch (error) {
       console.error("Error fetching instances:", error);
     } finally {
@@ -1229,16 +1222,6 @@ const EC2Table: React.FC<EC2TableProps> = ({
             headers: { "x-user-email": email },
           }
         );
-
-        await logToSplunk({
-          session: email,
-          action: `lab_instance_${action}`,
-          details: {
-            instance_id: instanceId,
-            instance_name: instance.Name,
-            public_ip: instance.PublicIp || "N/A",
-          },
-        });
       } catch (error) {
         console.error(`Action ${action} failed:`, error);
       }
@@ -1697,16 +1680,6 @@ const getBulkButtonTooltip = useCallback(
               publicIp: instance.PublicIp,
             },
           }));
-
-          await logToSplunk({
-            session: email,
-            action: "get_windows_password",
-            details: {
-              instance_id: instanceId,
-              instance_name: "Windows(AD&DNS)",
-              status: "success",
-            },
-          });
         } else {
           setPasswordModal((prev) => ({
             ...prev,
@@ -1714,17 +1687,6 @@ const getBulkButtonTooltip = useCallback(
             error: response.data.message || "Failed to retrieve password.",
             details: null,
           }));
-
-          await logToSplunk({
-            session: email,
-            action: "get_windows_password",
-            details: {
-              instance_id: instanceId,
-              instance_name: "Windows(AD&DNS)",
-              status: "failed",
-              error: response.data.message || "Unknown error",
-            },
-          });
         }
       } catch (error) {
         console.error("Error fetching Windows password:", error);
@@ -1735,17 +1697,6 @@ const getBulkButtonTooltip = useCallback(
             "An error occurred while fetching the password. Please try again.",
           details: null,
         }));
-
-        await logToSplunk({
-          session: email,
-          action: "get_windows_password",
-          details: {
-            instance_id: instanceId,
-            instance_name: "Windows(AD&DNS)",
-            status: "failed",
-            error: (error as Error).message || "Network error",
-          },
-        });
       }
     },
     [
@@ -3351,15 +3302,6 @@ const getBulkButtonTooltip = useCallback(
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all duration-300 shadow-md hover:shadow-lg font-medium text-sm"
                   onClick={() => {
-                    logToSplunk({
-                      session: email,
-                      action: "extend_validity_whatsapp_click",
-                      details: {
-                        instance_id: extendValidityModal.instanceId,
-                        instance_name: extendValidityModal.instanceName,
-                        end_date: extendValidityModal.endDate,
-                      },
-                    });
                   }}
                 >
                   <MessageCircle className="w-4 h-4" />
