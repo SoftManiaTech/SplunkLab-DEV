@@ -415,7 +415,7 @@ function LabManagerClient(): JSX.Element {
         ) : (
           <div className="mt-20 max-w-md mx-auto bg-white border border-gray-200 shadow-lg rounded-2xl p-8 text-center">
             <h3 className="text-2xl font-semibold text-gray-800 mb-3">👋 Welcome to SoftMania Labs</h3>
-            <p className="text-teal-500 font-semibold mb-2">It looks like you don’t have a lab assigned yet.</p>
+            <p className="text-blue-500 font-semibold mb-2">It looks like you don’t have a lab assigned yet.</p>
             <p className="text-gray-500">Choose a plan to get started with your personalized lab setup.</p>
             <div className="mt-6 flex flex-col gap-3">
               <button
@@ -457,13 +457,13 @@ function LabManagerClient(): JSX.Element {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full h-full max-w-7xl max-h-[95vh] flex flex-col">
             {/* Modal header */}
-            <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-t-xl">
+            <div className="flex items-center justify-between p-1 border-b border-gray-200 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-t-xl">
               <div className="flex items-center gap-3">
-                <h3 className="text-xl font-bold"></h3>
+                <h3 className="text-sm font-bold"></h3>
               </div>
               <button
                 onClick={() => setShowUserGuideModal(false)}
-                className="text-white hover:text-gray-400 text-2xl font-bold transition-colors"
+                className="text-white hover:text-gray-400 text-lg mr-3 font-bold transition-colors"
               >
                 ×
               </button>
